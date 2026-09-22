@@ -23,6 +23,7 @@ function getMessageText(message: WAMessage): string {
 
 export function registerCaptureListener(sock: WASocket): void {
   sock.ev.on("messages.upsert", async (event) => {
+    console.log(`[captura] messages.upsert recebido: type=${event.type}, count=${event.messages.length}`);
     if (event.type !== "notify") return;
 
     for (const message of event.messages) {
@@ -38,16 +39,33 @@ export function registerCaptureListener(sock: WASocket): void {
 async function handleMessage(sock: WASocket, message: WAMessage): Promise<void> {
   const jid = message.key.remoteJid;
   if (!jid || !jid.endsWith("@g.us")) return; // só grupos
-  if (message.key.fromMe) return;
+
+  if (message.key.fromMe) {
+    console.log(`[captura] Ignorada: mensagem enviada pelo próprio número conectado (jid=${jid}).`);
+    return;
+  }
 
   const group = await prisma.whatsAppGroup.findUnique({ where: { jid } });
-  if (!group || !group.isMonitoring) return;
+  if (!group) {
+    console.log(`[captura] Mensagem de grupo não cadastrado (jid=${jid}) — rode /whatsapp/groups/sync.`);
+    return;
+  }
+  if (!group.isMonitoring) {
+    console.log(`[captura] Ignorada: grupo "${group.name}" não está com monitoramento ativo.`);
+    return;
+  }
 
   const text = getMessageText(message);
-  if (!text) return;
+  if (!text) {
+    console.log(`[captura] Mensagem de "${group.name}" sem texto/legenda extraível — tipo:`, Object.keys(message.message ?? {}));
+    return;
+  }
 
   const links = extractLinks(text);
-  if (links.length === 0) return;
+  if (links.length === 0) {
+    console.log(`[captura] Mensagem de "${group.name}" sem link reconhecível: "${text.slice(0, 80)}"`);
+    return;
+  }
 
   const allowedMarketplaces = group.monitoredMarketplaces
     ? group.monitoredMarketplaces.split(",").map((m) => m.trim())
@@ -60,12 +78,26 @@ async function handleMessage(sock: WASocket, message: WAMessage): Promise<void> 
 
   for (const link of links) {
     const marketplace = detectMarketplace(link);
-    if (marketplace === "unknown") continue;
-    if (allowedMarketplaces.length > 0 && !allowedMarketplaces.includes(marketplace)) continue;
-    if (!passesKeywordFilter(text)) continue;
+    if (marketplace === "unknown") {
+      console.log(`[captura] Link ignorado (marketplace não reconhecido): ${link}`);
+      continue;
+    }
+    if (allowedMarketplaces.length > 0 && !allowedMarketplaces.includes(marketplace)) {
+      console.log(
+        `[captura] Link ignorado: "${marketplace}" não está na lista de marketplaces do grupo "${group.name}" (${group.monitoredMarketplaces}).`
+      );
+      continue;
+    }
+    if (!passesKeywordFilter(text)) {
+      console.log(`[captura] Mensagem bloqueada pelo filtro de palavras.`);
+      continue;
+    }
 
     const dedupeKey = normalizeUrl(link);
-    if (await isDuplicate(dedupeKey)) continue;
+    if (await isDuplicate(dedupeKey)) {
+      console.log(`[captura] Ignorado: produto duplicado dentro da janela de dedupe (${link}).`);
+      continue;
+    }
 
     let affiliateUrl: string | undefined;
     let conversionError: string | undefined;
