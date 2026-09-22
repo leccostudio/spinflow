@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// SQLite has no native enum support in Prisma; valid values enforced in app code:
+// "DISCONNECTED" | "CONNECTING" | "CONNECTED"
+model WhatsAppAccount {
+  id          String          @id @default(cuid())
+  name        String
+  phoneNumber String?
+  status      String          @default("DISCONNECTED")
+  authDir     String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  groups      WhatsAppGroup[]
+}
+
+model WhatsAppGroup {
+  id                String          @id @default(cuid())
+  jid               String          @unique
+  name              String
+  isMonitoring      Boolean         @default(false)
+  isSending         Boolean         @default(false)
+  participantsCount Int             @default(0)
+  lastSyncedAt      DateTime        @default(now())
+  account           WhatsAppAccount @relation(fields: [accountId], references: [id])
+  accountId         String
+}
