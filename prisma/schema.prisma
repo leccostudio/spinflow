@@ -35,6 +35,17 @@ model WhatsAppGroup {
   capturedProducts  CapturedProduct[]
 }
 
+model MessageTemplate {
+  id         String   @id @default(cuid())
+  name       String
+  // "shopee" | "amazon" | "mercadolivre" | "" (generico, serve pra qualquer marketplace)
+  marketplace String  @default("")
+  content    String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
 // SQLite has no native enum support in Prisma; valid values enforced in app code:
 // "CAPTURED" | "CONVERTED" | "CONVERSION_FAILED"
 model CapturedProduct {

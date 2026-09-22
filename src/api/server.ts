@@ -4,6 +4,8 @@ import { prisma } from "../db/client.js";
 import { getSocket } from "../whatsapp/baileys.js";
 import { syncGroups } from "../whatsapp/groups.js";
 import { convertLink } from "../links/convert.js";
+import { renderProductWithTemplate } from "../templates/service.js";
+import { sendTextToGroups } from "../messages/send.js";
 
 export async function buildServer() {
   const app = Fastify({ logger: true });
@@ -85,6 +87,92 @@ export async function buildServer() {
       const message = err instanceof Error ? err.message : "Erro desconhecido na conversão.";
       const notConfigured = message.includes("não configurad");
       return reply.code(notConfigured ? 503 : 400).send({ error: message });
+    }
+  });
+
+  // --- Templates ---
+
+  app.get("/templates", async () => {
+    return prisma.messageTemplate.findMany({ orderBy: { createdAt: "asc" } });
+  });
+
+  app.post<{ Body: { name: string; marketplace?: string; content: string; isActive?: boolean } }>(
+    "/templates",
+    async (request, reply) => {
+      const { name, marketplace, content, isActive } = request.body;
+      if (!name || !content) {
+        return reply.code(400).send({ error: "Campos 'name' e 'content' são obrigatórios." });
+      }
+      return prisma.messageTemplate.create({
+        data: { name, marketplace: marketplace ?? "", content, isActive: isActive ?? true },
+      });
+    }
+  );
+
+  app.patch<{
+    Params: { id: string };
+    Body: { name?: string; marketplace?: string; content?: string; isActive?: boolean };
+  }>("/templates/:id", async (request, reply) => {
+    const { id } = request.params;
+    const existing = await prisma.messageTemplate.findUnique({ where: { id } });
+    if (!existing) return reply.code(404).send({ error: "Template não encontrado." });
+    return prisma.messageTemplate.update({ where: { id }, data: request.body });
+  });
+
+  app.delete<{ Params: { id: string } }>("/templates/:id", async (request, reply) => {
+    const { id } = request.params;
+    const existing = await prisma.messageTemplate.findUnique({ where: { id } });
+    if (!existing) return reply.code(404).send({ error: "Template não encontrado." });
+    await prisma.messageTemplate.delete({ where: { id } });
+    return { ok: true };
+  });
+
+  app.post<{ Params: { id: string }; Body: { productId: string } }>(
+    "/templates/:id/preview",
+    async (request, reply) => {
+      const { id } = request.params;
+      const { productId } = request.body;
+      if (!productId) return reply.code(400).send({ error: "Campo 'productId' é obrigatório." });
+
+      try {
+        const result = await renderProductWithTemplate(productId, id);
+        return result;
+      } catch (err) {
+        return reply
+          .code(400)
+          .send({ error: err instanceof Error ? err.message : "Erro ao renderizar template." });
+      }
+    }
+  );
+
+  // --- Envio manual ---
+
+  app.post<{
+    Body: { groupIds: string[]; text?: string; productId?: string; templateId?: string };
+  }>("/messages/send", async (request, reply) => {
+    const { groupIds, text, productId, templateId } = request.body;
+    if (!groupIds || groupIds.length === 0) {
+      return reply.code(400).send({ error: "Campo 'groupIds' é obrigatório e não pode ser vazio." });
+    }
+
+    let finalText = text;
+    try {
+      if (!finalText && productId) {
+        const rendered = await renderProductWithTemplate(productId, templateId);
+        finalText = rendered.text;
+      }
+      if (!finalText) {
+        return reply
+          .code(400)
+          .send({ error: "Forneça 'text' diretamente ou 'productId' para renderizar via template." });
+      }
+
+      const results = await sendTextToGroups(groupIds, finalText);
+      return { text: finalText, results };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido no envio.";
+      const notConnected = message.includes("não foi inicializado");
+      return reply.code(notConnected ? 503 : 400).send({ error: message });
     }
   });
 
