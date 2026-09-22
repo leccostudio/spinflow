@@ -23,6 +23,7 @@ Na primeira execução, um QR code aparece no terminal. Escaneie em **WhatsApp >
 - [x] **Sprint 1** — Servidor Fastify + Prisma/SQLite, conexão WhatsApp via Baileys (QR pairing, reconexão automática), sincronização e toggle de grupos
 - [x] **Sprint 2** — Conversão de link: Shopee (API oficial, assinatura SHA256), Amazon (tag na URL), Mercado Livre (manual)
 - [x] **Sprint 3** — Captura de produtos: listener nos grupos monitorados, filtro de marketplace *por grupo*, palavras restritas/permitidas (globais), deduplicação por janela de horas
+- [x] **Sprint 4** — Motor de templates (Handlebars) + envio manual, com extração heurística de nome/preço/desconto/cupom do texto bruto capturado
 
 ## Configuração (`.env`)
 
@@ -47,11 +48,29 @@ Na primeira execução, um QR code aparece no terminal. Escaneie em **WhatsApp >
 | PATCH | `/whatsapp/groups/:id` | Atualiza `isMonitoring` / `isSending` / `monitoredMarketplaces` de um grupo |
 | POST | `/links/convert` | Converte um link (`{ url, subIds? }`) pro marketplace detectado |
 | GET | `/products` | Lista produtos capturados (filtros: `?marketplace=`, `?groupId=`, `?status=`) |
+| GET/POST | `/templates` | Lista / cria templates de mensagem |
+| PATCH/DELETE | `/templates/:id` | Atualiza / remove um template |
+| POST | `/templates/:id/preview` | Renderiza um template contra um produto (`{ productId }`), sem enviar |
+| POST | `/messages/send` | Envia mensagem pros grupos (`{ groupIds, text }` ou `{ groupIds, productId, templateId? }`) |
+
+## Sintaxe de template
+
+Variáveis: `{{nome_do_produto}}`, `{{preco_original}}`, `{{preco_com_desconto}}`, `{{percentual_desconto}}`, `{{cupom}}`, `{{link_produto}}`, `{{informacao_adicional}}`.
+
+Condicionais (Handlebars — sintaxe diferente do BuboFlow original, mais fácil de escrever/ler):
+
+```
+{{#ifGt percentual_desconto 0}}De: ~R$ {{preco_original}}~
+{{/ifGt}}*Por: R$ {{preco_com_desconto}}*
+
+{{#if cupom}}Cupom: {{cupom}}
+{{/if}}
+```
 
 ## Próximos passos (roadmap enxuto)
 
 1. ~~Conversão de link~~ ✅
 2. ~~Captura de produtos nos grupos monitorados + filtros~~ ✅
-3. Motor de templates + envio manual com preview
+3. ~~Motor de templates + envio manual~~ ✅
 4. Agendamento + disparo automático (com guardrails anti-ban)
 5. Bot do Grupo de Automação (comandos via WhatsApp)
