@@ -6,6 +6,8 @@ import { syncGroups } from "../whatsapp/groups.js";
 import { convertLink } from "../links/convert.js";
 import { renderProductWithTemplate } from "../templates/service.js";
 import { sendTextToGroups } from "../messages/send.js";
+import { createScheduledMessage, cancelScheduledMessage } from "../scheduler/scheduled.js";
+import { getAutoDispatchSettings, updateAutoDispatchSettings } from "../scheduler/autoDispatch.js";
 
 export async function buildServer() {
   const app = Fastify({ logger: true });
@@ -42,13 +44,23 @@ export async function buildServer() {
       isSending?: boolean;
       monitoredMarketplaces?: string[];
       useOriginalImage?: boolean;
+      isAutomationGroup?: boolean;
     };
   }>("/whatsapp/groups/:id", async (request, reply) => {
     const { id } = request.params;
-    const { isMonitoring, isSending, monitoredMarketplaces, useOriginalImage } = request.body;
+    const { isMonitoring, isSending, monitoredMarketplaces, useOriginalImage, isAutomationGroup } =
+      request.body;
     const group = await prisma.whatsAppGroup.findUnique({ where: { id } });
     if (!group) {
       return reply.code(404).send({ error: "Grupo não encontrado." });
+    }
+
+    // So um grupo pode ser o "Grupo de Automação" por vez.
+    if (isAutomationGroup === true) {
+      await prisma.whatsAppGroup.updateMany({
+        where: { isAutomationGroup: true, id: { not: id } },
+        data: { isAutomationGroup: false },
+      });
     }
 
     return prisma.whatsAppGroup.update({
@@ -60,6 +72,7 @@ export async function buildServer() {
           ? { monitoredMarketplaces: monitoredMarketplaces.join(",") }
           : {}),
         ...(useOriginalImage !== undefined ? { useOriginalImage } : {}),
+        ...(isAutomationGroup !== undefined ? { isAutomationGroup } : {}),
       },
     });
   });
@@ -184,6 +197,85 @@ export async function buildServer() {
       const message = err instanceof Error ? err.message : "Erro desconhecido no envio.";
       const notConnected = message.includes("não foi inicializado");
       return reply.code(notConnected ? 503 : 400).send({ error: message });
+    }
+  });
+
+  // --- Agendamentos ---
+
+  app.get<{ Querystring: { status?: string } }>("/messages/scheduled", async (request) => {
+    const { status } = request.query;
+    return prisma.scheduledMessage.findMany({
+      where: status ? { status } : {},
+      orderBy: { scheduledAt: "asc" },
+    });
+  });
+
+  app.post<{
+    Body: {
+      groupIds: string[];
+      scheduledAt: string;
+      text?: string;
+      productId?: string;
+      templateId?: string;
+    };
+  }>("/messages/scheduled", async (request, reply) => {
+    const { groupIds, scheduledAt, text, productId, templateId } = request.body;
+    if (!groupIds || groupIds.length === 0) {
+      return reply.code(400).send({ error: "Campo 'groupIds' é obrigatório e não pode ser vazio." });
+    }
+    if (!scheduledAt) {
+      return reply.code(400).send({ error: "Campo 'scheduledAt' é obrigatório (ISO 8601)." });
+    }
+
+    try {
+      const job = await createScheduledMessage({
+        groupIds,
+        scheduledAt: new Date(scheduledAt),
+        text,
+        productId,
+        templateId,
+      });
+      return job;
+    } catch (err) {
+      return reply
+        .code(400)
+        .send({ error: err instanceof Error ? err.message : "Erro ao agendar mensagem." });
+    }
+  });
+
+  app.delete<{ Params: { id: string } }>("/messages/scheduled/:id", async (request, reply) => {
+    try {
+      return await cancelScheduledMessage(request.params.id);
+    } catch (err) {
+      return reply
+        .code(400)
+        .send({ error: err instanceof Error ? err.message : "Erro ao cancelar agendamento." });
+    }
+  });
+
+  // --- Disparo automático ---
+
+  app.get("/auto-dispatch", async () => {
+    return getAutoDispatchSettings();
+  });
+
+  app.patch<{
+    Body: {
+      enabled?: boolean;
+      startHour?: number;
+      endHour?: number;
+      minIntervalMinutes?: number;
+      maxIntervalMinutes?: number;
+      minProductsPerRun?: number;
+      maxProductsPerRun?: number;
+    };
+  }>("/auto-dispatch", async (request, reply) => {
+    try {
+      return await updateAutoDispatchSettings(request.body);
+    } catch (err) {
+      return reply
+        .code(400)
+        .send({ error: err instanceof Error ? err.message : "Erro ao atualizar configuração." });
     }
   });
 

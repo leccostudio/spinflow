@@ -10,6 +10,7 @@ import path from "node:path";
 import { prisma } from "../db/client.js";
 import { syncGroups } from "./groups.js";
 import { registerCaptureListener } from "../capture/listener.js";
+import { registerAutomationListener } from "../automation/listener.js";
 
 const ACCOUNT_NAME = "default";
 const AUTH_DIR = path.join(process.cwd(), "data", "auth", ACCOUNT_NAME);
@@ -47,6 +48,7 @@ export async function startWhatsApp(): Promise<void> {
 
   sock.ev.on("creds.update", saveCreds);
   registerCaptureListener(sock);
+  registerAutomationListener(sock);
 
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;

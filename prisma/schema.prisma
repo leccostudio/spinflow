@@ -30,6 +30,8 @@ model WhatsAppGroup {
   monitoredMarketplaces String        @default("")
   // Reaproveita a imagem original da mensagem capturada em vez de gerar link preview.
   useOriginalImage  Boolean           @default(true)
+  // So um grupo deveria ter isso ativo por vez (e o "controle remoto" do bot).
+  isAutomationGroup Boolean           @default(false)
   participantsCount Int               @default(0)
   lastSyncedAt      DateTime          @default(now())
   account           WhatsAppAccount   @relation(fields: [accountId], references: [id])
@@ -61,10 +63,45 @@ model CapturedProduct {
   messageText     String?
   // Caminho local do arquivo (data/media/...), quando o grupo usa "imagem original".
   imagePath       String?
+  // salvar_prioridade: entra na frente da fila do disparo automatico.
+  priority        Boolean       @default(false)
+  // Marcado quando o disparo automatico ja mandou esse produto (evita repetir).
+  dispatchedAt    DateTime?
   sourceGroup     WhatsAppGroup @relation(fields: [sourceGroupId], references: [id])
   sourceGroupId   String
   capturedAt      DateTime      @default(now())
 
   @@index([dedupeKey])
   @@index([capturedAt])
+}
+
+model ScheduledMessage {
+  id         String    @id @default(cuid())
+  // ids de WhatsAppGroup, separados por virgula
+  groupIds   String
+  text       String?
+  productId  String?
+  templateId String?
+  scheduledAt DateTime
+  // "PENDING" | "SENT" | "FAILED" | "CANCELLED"
+  status     String    @default("PENDING")
+  error      String?
+  sentAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([status, scheduledAt])
+}
+
+model AutoDispatchSettings {
+  id                    String    @id @default("singleton")
+  enabled               Boolean   @default(false)
+  startHour             Int       @default(9)
+  endHour               Int       @default(22)
+  minIntervalMinutes    Int       @default(30)
+  maxIntervalMinutes    Int       @default(60)
+  minProductsPerRun     Int       @default(1)
+  maxProductsPerRun     Int       @default(2)
+  lastRunAt             DateTime?
+  nextRunAt             DateTime?
+  updatedAt             DateTime  @updatedAt
 }
