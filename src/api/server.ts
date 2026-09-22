@@ -156,10 +156,13 @@ export async function buildServer() {
     }
 
     let finalText = text;
+    let previewUrl: string | undefined;
     try {
       if (!finalText && productId) {
         const rendered = await renderProductWithTemplate(productId, templateId);
         finalText = rendered.text;
+        const product = await prisma.capturedProduct.findUnique({ where: { id: productId } });
+        previewUrl = product?.affiliateUrl ?? product?.sourceUrl;
       }
       if (!finalText) {
         return reply
@@ -167,7 +170,7 @@ export async function buildServer() {
           .send({ error: "Forneça 'text' diretamente ou 'productId' para renderizar via template." });
       }
 
-      const results = await sendTextToGroups(groupIds, finalText);
+      const results = await sendTextToGroups(groupIds, finalText, previewUrl);
       return { text: finalText, results };
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro desconhecido no envio.";
