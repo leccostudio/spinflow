@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import { prisma } from "../db/client.js";
 import { getSocket } from "../whatsapp/baileys.js";
 import { syncGroups } from "../whatsapp/groups.js";
+import { convertLink } from "../links/convert.js";
 
 export async function buildServer() {
   const app = Fastify({ logger: true });
@@ -50,6 +51,22 @@ export async function buildServer() {
         ...(isSending !== undefined ? { isSending } : {}),
       },
     });
+  });
+
+  app.post<{ Body: { url?: string; subIds?: string[] } }>("/links/convert", async (request, reply) => {
+    const { url, subIds } = request.body ?? {};
+    if (!url) {
+      return reply.code(400).send({ error: "Campo 'url' é obrigatório." });
+    }
+
+    try {
+      const result = await convertLink(url, subIds);
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido na conversão.";
+      const notConfigured = message.includes("não configurad");
+      return reply.code(notConfigured ? 503 : 400).send({ error: message });
+    }
   });
 
   return app;
