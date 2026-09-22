@@ -28,6 +28,8 @@ model WhatsAppGroup {
   isSending         Boolean           @default(false)
   // Comma-separated marketplace ids (e.g. "shopee,amazon"). Empty string = todas aceitas.
   monitoredMarketplaces String        @default("")
+  // Reaproveita a imagem original da mensagem capturada em vez de gerar link preview.
+  useOriginalImage  Boolean           @default(true)
   participantsCount Int               @default(0)
   lastSyncedAt      DateTime          @default(now())
   account           WhatsAppAccount   @relation(fields: [accountId], references: [id])
@@ -57,6 +59,8 @@ model CapturedProduct {
   status          String        @default("CAPTURED")
   conversionError String?
   messageText     String?
+  // Caminho local do arquivo (data/media/...), quando o grupo usa "imagem original".
+  imagePath       String?
   sourceGroup     WhatsAppGroup @relation(fields: [sourceGroupId], references: [id])
   sourceGroupId   String
   capturedAt      DateTime      @default(now())

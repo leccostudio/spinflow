@@ -1,4 +1,5 @@
 import { getUrlInfo } from "@whiskeysockets/baileys";
+import { readFile } from "node:fs/promises";
 import { prisma } from "../db/client.js";
 import { getSocket } from "../whatsapp/baileys.js";
 import { detectMarketplace } from "../links/detect.js";
@@ -33,19 +34,41 @@ async function buildTrustedLinkPreview(url: string | undefined) {
   }
 }
 
+export interface SendOptions {
+  previewUrl?: string;
+  imagePath?: string | null;
+}
+
 export async function sendTextToGroups(
   groupIds: string[],
   text: string,
-  previewUrl?: string
+  options: SendOptions = {}
 ): Promise<SendResult[]> {
   const groups = await prisma.whatsAppGroup.findMany({ where: { id: { in: groupIds } } });
   const sock = getSocket();
-  const linkPreview = await buildTrustedLinkPreview(previewUrl);
+
+  // Imagem original do grupo monitorado tem prioridade sobre link preview
+  // gerado a partir da URL (mais confiável — não depende de tags og: que a
+  // Shopee/Amazon costumam nem expor em links curtos).
+  let imageBuffer: Buffer | null = null;
+  if (options.imagePath) {
+    try {
+      imageBuffer = await readFile(options.imagePath);
+    } catch (err) {
+      console.error("Falha ao ler imagem capturada, seguindo sem ela:", err);
+    }
+  }
+
+  const linkPreview = imageBuffer ? null : await buildTrustedLinkPreview(options.previewUrl);
 
   const results: SendResult[] = [];
   for (const group of groups) {
     try {
-      await sock.sendMessage(group.jid, { text, linkPreview });
+      if (imageBuffer) {
+        await sock.sendMessage(group.jid, { image: imageBuffer, caption: text });
+      } else {
+        await sock.sendMessage(group.jid, { text, linkPreview });
+      }
       results.push({ groupId: group.id, groupName: group.name, jid: group.jid, success: true });
     } catch (err) {
       results.push({

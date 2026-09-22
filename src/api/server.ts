@@ -37,10 +37,15 @@ export async function buildServer() {
 
   app.patch<{
     Params: { id: string };
-    Body: { isMonitoring?: boolean; isSending?: boolean; monitoredMarketplaces?: string[] };
+    Body: {
+      isMonitoring?: boolean;
+      isSending?: boolean;
+      monitoredMarketplaces?: string[];
+      useOriginalImage?: boolean;
+    };
   }>("/whatsapp/groups/:id", async (request, reply) => {
     const { id } = request.params;
-    const { isMonitoring, isSending, monitoredMarketplaces } = request.body;
+    const { isMonitoring, isSending, monitoredMarketplaces, useOriginalImage } = request.body;
     const group = await prisma.whatsAppGroup.findUnique({ where: { id } });
     if (!group) {
       return reply.code(404).send({ error: "Grupo não encontrado." });
@@ -54,6 +59,7 @@ export async function buildServer() {
         ...(monitoredMarketplaces !== undefined
           ? { monitoredMarketplaces: monitoredMarketplaces.join(",") }
           : {}),
+        ...(useOriginalImage !== undefined ? { useOriginalImage } : {}),
       },
     });
   });
@@ -157,12 +163,14 @@ export async function buildServer() {
 
     let finalText = text;
     let previewUrl: string | undefined;
+    let imagePath: string | null | undefined;
     try {
       if (!finalText && productId) {
         const rendered = await renderProductWithTemplate(productId, templateId);
         finalText = rendered.text;
         const product = await prisma.capturedProduct.findUnique({ where: { id: productId } });
         previewUrl = product?.affiliateUrl ?? product?.sourceUrl;
+        imagePath = product?.imagePath;
       }
       if (!finalText) {
         return reply
@@ -170,7 +178,7 @@ export async function buildServer() {
           .send({ error: "Forneça 'text' diretamente ou 'productId' para renderizar via template." });
       }
 
-      const results = await sendTextToGroups(groupIds, finalText, previewUrl);
+      const results = await sendTextToGroups(groupIds, finalText, { previewUrl, imagePath });
       return { text: finalText, results };
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro desconhecido no envio.";

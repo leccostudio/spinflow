@@ -5,6 +5,7 @@ import { passesKeywordFilter } from "./keywordFilter.js";
 import { normalizeUrl, isDuplicate } from "./dedupe.js";
 import { detectMarketplace } from "../links/detect.js";
 import { convertLink } from "../links/convert.js";
+import { downloadCapturedImage } from "./media.js";
 
 type WAMessage = proto.IWebMessageInfo;
 
@@ -26,7 +27,7 @@ export function registerCaptureListener(sock: WASocket): void {
 
     for (const message of event.messages) {
       try {
-        await handleMessage(message);
+        await handleMessage(sock, message);
       } catch (err) {
         console.error("Erro ao processar mensagem para captura:", err);
       }
@@ -34,7 +35,7 @@ export function registerCaptureListener(sock: WASocket): void {
   });
 }
 
-async function handleMessage(message: WAMessage): Promise<void> {
+async function handleMessage(sock: WASocket, message: WAMessage): Promise<void> {
   const jid = message.key.remoteJid;
   if (!jid || !jid.endsWith("@g.us")) return; // só grupos
   if (message.key.fromMe) return;
@@ -51,6 +52,11 @@ async function handleMessage(message: WAMessage): Promise<void> {
   const allowedMarketplaces = group.monitoredMarketplaces
     ? group.monitoredMarketplaces.split(",").map((m) => m.trim())
     : [];
+
+  // Baixa uma vez só e reaproveita pra todos os links dessa mesma mensagem.
+  const imagePath = group.useOriginalImage
+    ? await downloadCapturedImage(sock, message)
+    : undefined;
 
   for (const link of links) {
     const marketplace = detectMarketplace(link);
@@ -83,6 +89,7 @@ async function handleMessage(message: WAMessage): Promise<void> {
         conversionError,
         status,
         messageText: text.slice(0, 2000),
+        imagePath,
         sourceGroupId: group.id,
       },
     });
