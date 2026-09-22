@@ -21,13 +21,35 @@ model WhatsAppAccount {
 }
 
 model WhatsAppGroup {
-  id                String          @id @default(cuid())
-  jid               String          @unique
+  id                String            @id @default(cuid())
+  jid               String            @unique
   name              String
-  isMonitoring      Boolean         @default(false)
-  isSending         Boolean         @default(false)
-  participantsCount Int             @default(0)
-  lastSyncedAt      DateTime        @default(now())
-  account           WhatsAppAccount @relation(fields: [accountId], references: [id])
+  isMonitoring      Boolean           @default(false)
+  isSending         Boolean           @default(false)
+  // Comma-separated marketplace ids (e.g. "shopee,amazon"). Empty string = todas aceitas.
+  monitoredMarketplaces String        @default("")
+  participantsCount Int               @default(0)
+  lastSyncedAt      DateTime          @default(now())
+  account           WhatsAppAccount   @relation(fields: [accountId], references: [id])
   accountId         String
+  capturedProducts  CapturedProduct[]
+}
+
+// SQLite has no native enum support in Prisma; valid values enforced in app code:
+// "CAPTURED" | "CONVERTED" | "CONVERSION_FAILED"
+model CapturedProduct {
+  id              String        @id @default(cuid())
+  sourceUrl       String
+  dedupeKey       String
+  marketplace     String
+  affiliateUrl    String?
+  status          String        @default("CAPTURED")
+  conversionError String?
+  messageText     String?
+  sourceGroup     WhatsAppGroup @relation(fields: [sourceGroupId], references: [id])
+  sourceGroupId   String
+  capturedAt      DateTime      @default(now())
+
+  @@index([dedupeKey])
+  @@index([capturedAt])
 }

@@ -35,10 +35,10 @@ export async function buildServer() {
 
   app.patch<{
     Params: { id: string };
-    Body: { isMonitoring?: boolean; isSending?: boolean };
+    Body: { isMonitoring?: boolean; isSending?: boolean; monitoredMarketplaces?: string[] };
   }>("/whatsapp/groups/:id", async (request, reply) => {
     const { id } = request.params;
-    const { isMonitoring, isSending } = request.body;
+    const { isMonitoring, isSending, monitoredMarketplaces } = request.body;
     const group = await prisma.whatsAppGroup.findUnique({ where: { id } });
     if (!group) {
       return reply.code(404).send({ error: "Grupo não encontrado." });
@@ -49,9 +49,28 @@ export async function buildServer() {
       data: {
         ...(isMonitoring !== undefined ? { isMonitoring } : {}),
         ...(isSending !== undefined ? { isSending } : {}),
+        ...(monitoredMarketplaces !== undefined
+          ? { monitoredMarketplaces: monitoredMarketplaces.join(",") }
+          : {}),
       },
     });
   });
+
+  app.get<{ Querystring: { marketplace?: string; groupId?: string; status?: string } }>(
+    "/products",
+    async (request) => {
+      const { marketplace, groupId, status } = request.query;
+      return prisma.capturedProduct.findMany({
+        where: {
+          ...(marketplace ? { marketplace } : {}),
+          ...(groupId ? { sourceGroupId: groupId } : {}),
+          ...(status ? { status } : {}),
+        },
+        orderBy: { capturedAt: "desc" },
+        include: { sourceGroup: { select: { name: true } } },
+      });
+    }
+  );
 
   app.post<{ Body: { url?: string; subIds?: string[] } }>("/links/convert", async (request, reply) => {
     const { url, subIds } = request.body ?? {};
