@@ -1,19 +1,21 @@
-import { env } from "../config/env.js";
+import { getRestrictedWords, getAllowedWords } from "../config/settings.js";
 
 /**
  * Palavras restritas descartam a mensagem sempre que presentes.
  * Palavras permitidas, quando configuradas, exigem que ao menos uma apareça
  * (filtro positivo mais restritivo) — mesma semântica do BuboFlow original.
  */
-export function passesKeywordFilter(text: string): boolean {
+export async function passesKeywordFilter(text: string): Promise<boolean> {
   const lower = text.toLowerCase();
 
-  if (env.monitoring.restrictedWords.some((word) => lower.includes(word))) {
+  const restrictedWords = await getRestrictedWords();
+  if (restrictedWords.some((word) => lower.includes(word))) {
     return false;
   }
 
-  if (env.monitoring.allowedWords.length > 0) {
-    return env.monitoring.allowedWords.some((word) => lower.includes(word));
+  const allowedWords = await getAllowedWords();
+  if (allowedWords.length > 0) {
+    return allowedWords.some((word) => lower.includes(word));
   }
 
   return true;

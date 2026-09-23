@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { env, isShopeeConfigured } from "../config/env.js";
+import { getPlatformSettings, getShopeeSubIds, isShopeeConfigured } from "../config/settings.js";
 
 const ENDPOINT = "https://open-api.affiliate.shopee.com.br/graphql";
 
@@ -9,13 +9,14 @@ interface ShopeeGraphQLResponse {
 }
 
 export async function convertShopeeLink(originUrl: string, subIds?: string[]): Promise<string> {
-  if (!isShopeeConfigured()) {
+  if (!(await isShopeeConfigured())) {
     throw new Error(
-      "Credenciais da Shopee não configuradas (SHOPEE_APP_ID / SHOPEE_APP_SECRET no .env)."
+      "Credenciais da Shopee não configuradas (Configurações > Plataformas)."
     );
   }
 
-  const ids = (subIds && subIds.length > 0 ? subIds : env.shopee.subIds).slice(0, 5);
+  const settings = await getPlatformSettings();
+  const ids = (subIds && subIds.length > 0 ? subIds : await getShopeeSubIds()).slice(0, 5);
 
   // Inline literal syntax to match the documented example exactly; JSON.stringify
   // safely escapes the URL as a valid GraphQL/JSON string literal.
@@ -26,14 +27,14 @@ export async function convertShopeeLink(originUrl: string, subIds?: string[]): P
   const payload = JSON.stringify({ query });
   const timestamp = Math.floor(Date.now() / 1000);
   const signature = createHash("sha256")
-    .update(`${env.shopee.appId}${timestamp}${payload}${env.shopee.appSecret}`)
+    .update(`${settings.shopeeAppId}${timestamp}${payload}${settings.shopeeAppSecret}`)
     .digest("hex");
 
   const response = await fetch(ENDPOINT, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `SHA256 Credential=${env.shopee.appId}, Timestamp=${timestamp}, Signature=${signature}`,
+      Authorization: `SHA256 Credential=${settings.shopeeAppId}, Timestamp=${timestamp}, Signature=${signature}`,
     },
     body: payload,
   });

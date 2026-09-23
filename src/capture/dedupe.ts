@@ -1,5 +1,5 @@
 import { prisma } from "../db/client.js";
-import { env } from "../config/env.js";
+import { getDedupeWindowHours } from "../config/settings.js";
 
 /**
  * Chave de deduplicacao: host + path, sem query string (a maior parte do
@@ -16,7 +16,7 @@ export function normalizeUrl(rawUrl: string): string {
 }
 
 export async function isDuplicate(dedupeKey: string): Promise<boolean> {
-  const windowHours = env.monitoring.dedupeWindowHours;
+  const windowHours = await getDedupeWindowHours();
   if (windowHours <= 0) return false;
 
   const since = new Date(Date.now() - windowHours * 60 * 60 * 1000);

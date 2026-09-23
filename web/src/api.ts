@@ -47,6 +47,14 @@ export interface WhatsAppGroup {
   backupAccountId: string | null;
 }
 
+export interface ProductDisplay {
+  name: string;
+  priceOriginal: number;
+  priceDiscounted: number;
+  discountPercent: number;
+  coupon: string;
+}
+
 export interface CapturedProduct {
   id: string;
   sourceUrl: string;
@@ -57,10 +65,30 @@ export interface CapturedProduct {
   messageText: string | null;
   imagePath: string | null;
   priority: boolean;
+  favorite: boolean;
   dispatchedAt: string | null;
+  nameOverride: string | null;
+  priceOriginalOverride: string | null;
+  priceDiscountedOverride: string | null;
+  couponOverride: string | null;
   sourceGroupId: string;
   sourceGroup?: { name: string };
   capturedAt: string;
+  display: ProductDisplay;
+}
+
+export interface PlatformSettings {
+  shopeeAppId: string;
+  shopeeAppSecret: string;
+  shopeeSubIds: string;
+  amazonAffiliateTag: string;
+  mercadoLivreTag: string;
+}
+
+export interface MonitoringSettings {
+  restrictedWords: string;
+  allowedWords: string;
+  dedupeWindowHours: number;
 }
 
 export interface MessageTemplate {
@@ -111,10 +139,26 @@ export const api = {
     > & { monitoredMarketplaces?: string[]; backupAccountId?: string | null }
   ) => request<WhatsAppGroup>(`/whatsapp/groups/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
-  products: (params?: { marketplace?: string; groupId?: string; status?: string }) => {
-    const qs = new URLSearchParams(params as Record<string, string>).toString();
+  products: (params?: {
+    marketplace?: string;
+    groupId?: string;
+    status?: string;
+    search?: string;
+    favorite?: string;
+    sort?: string;
+  }) => {
+    const clean: Record<string, string> = {};
+    for (const [k, v] of Object.entries(params ?? {})) if (v) clean[k] = v;
+    const qs = new URLSearchParams(clean).toString();
     return request<CapturedProduct[]>(`/products${qs ? `?${qs}` : ""}`);
   },
+  updateProduct: (
+    id: string,
+    body: Partial<
+      Pick<CapturedProduct, "favorite" | "nameOverride" | "priceOriginalOverride" | "priceDiscountedOverride" | "couponOverride">
+    >
+  ) => request<CapturedProduct>(`/products/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteProduct: (id: string) => request<{ ok: true }>(`/products/${id}`, { method: "DELETE" }),
 
   convertLink: (url: string) => request<{ affiliateUrl: string; marketplace: string; method: string }>("/links/convert", { method: "POST", body: JSON.stringify({ url }) }),
 
@@ -145,6 +189,13 @@ export const api = {
   autoDispatch: () => request<AutoDispatchSettings>("/auto-dispatch"),
   updateAutoDispatch: (body: Partial<AutoDispatchSettings>) =>
     request<AutoDispatchSettings>("/auto-dispatch", { method: "PATCH", body: JSON.stringify(body) }),
+
+  platformSettings: () => request<PlatformSettings>("/settings/platforms"),
+  updatePlatformSettings: (body: Partial<PlatformSettings>) =>
+    request<PlatformSettings>("/settings/platforms", { method: "PATCH", body: JSON.stringify(body) }),
+  monitoringSettings: () => request<MonitoringSettings>("/settings/monitoring"),
+  updateMonitoringSettings: (body: Partial<MonitoringSettings>) =>
+    request<MonitoringSettings>("/settings/monitoring", { method: "PATCH", body: JSON.stringify(body) }),
 
   authStatus: () => request<{ authenticated: boolean }>("/auth/status"),
   login: (password: string) =>

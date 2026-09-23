@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { api, type AutoDispatchSettings } from "../api";
+import { api, type AutoDispatchSettings } from "../../api";
+import BackLink from "./BackLink";
 
-export default function Settings() {
+export default function AutoDispatch() {
   const [settings, setSettings] = useState<AutoDispatchSettings | null>(null);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -52,6 +53,7 @@ export default function Settings() {
 
   return (
     <div>
+      <BackLink />
       <h1>Disparo Automático</h1>
       <p className="subtitle">Envia produtos da fila pros grupos de envio sozinho, dentro dos limites abaixo</p>
 

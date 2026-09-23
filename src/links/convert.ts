@@ -20,7 +20,7 @@ export async function convertLink(originUrl: string, subIds?: string[]): Promise
       return { marketplace, originalUrl: originUrl, affiliateUrl, method: "api" };
     }
     case "amazon": {
-      const affiliateUrl = convertAmazonLink(originUrl);
+      const affiliateUrl = await convertAmazonLink(originUrl);
       return { marketplace, originalUrl: originUrl, affiliateUrl, method: "tag" };
     }
     case "mercadolivre": {

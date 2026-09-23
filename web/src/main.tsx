@@ -10,7 +10,13 @@ import Groups from "./pages/Groups.tsx";
 import Products from "./pages/Products.tsx";
 import Templates from "./pages/Templates.tsx";
 import Scheduled from "./pages/Scheduled.tsx";
-import Settings from "./pages/Settings.tsx";
+import SettingsHub from "./pages/settings/SettingsHub.tsx";
+import AutoDispatch from "./pages/settings/AutoDispatch.tsx";
+import AutomationGroup from "./pages/settings/AutomationGroup.tsx";
+import Platforms from "./pages/settings/Platforms.tsx";
+import Monitoring from "./pages/settings/Monitoring.tsx";
+import Advanced from "./pages/settings/Advanced.tsx";
+import Site from "./pages/settings/Site.tsx";
 import { api } from "./api.ts";
 
 function Root() {
@@ -36,7 +42,13 @@ function Root() {
           <Route path="produtos" element={<Products />} />
           <Route path="templates" element={<Templates />} />
           <Route path="agendamentos" element={<Scheduled />} />
-          <Route path="configuracoes" element={<Settings />} />
+          <Route path="configuracoes" element={<SettingsHub />} />
+          <Route path="configuracoes/disparo-automatico" element={<AutoDispatch />} />
+          <Route path="configuracoes/grupo-automacao" element={<AutomationGroup />} />
+          <Route path="configuracoes/plataformas" element={<Platforms />} />
+          <Route path="configuracoes/monitoramento" element={<Monitoring />} />
+          <Route path="configuracoes/avancado" element={<Advanced />} />
+          <Route path="configuracoes/site" element={<Site />} />
         </Route>
       </Routes>
     </BrowserRouter>

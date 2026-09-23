@@ -8,6 +8,13 @@ import { renderProductWithTemplate } from "../templates/service.js";
 import { sendTextToGroups } from "../messages/send.js";
 import { createScheduledMessage, cancelScheduledMessage } from "../scheduler/scheduled.js";
 import { getAutoDispatchSettings, updateAutoDispatchSettings } from "../scheduler/autoDispatch.js";
+import { extractProductDisplay } from "../templates/context.js";
+import {
+  getPlatformSettings,
+  updatePlatformSettings,
+  getMonitoringSettings,
+  updateMonitoringSettings,
+} from "../config/settings.js";
 
 export async function apiRoutes(app: FastifyInstance) {
   app.get("/health", async () => ({ ok: true }));
@@ -115,21 +122,75 @@ export async function apiRoutes(app: FastifyInstance) {
     });
   });
 
-  app.get<{ Querystring: { marketplace?: string; groupId?: string; status?: string } }>(
-    "/products",
-    async (request) => {
-      const { marketplace, groupId, status } = request.query;
-      return prisma.capturedProduct.findMany({
-        where: {
-          ...(marketplace ? { marketplace } : {}),
-          ...(groupId ? { sourceGroupId: groupId } : {}),
-          ...(status ? { status } : {}),
-        },
-        orderBy: { capturedAt: "desc" },
-        include: { sourceGroup: { select: { name: true } } },
-      });
+  app.get<{
+    Querystring: {
+      marketplace?: string;
+      groupId?: string;
+      status?: string;
+      search?: string;
+      favorite?: string;
+      sort?: "recent" | "price_asc" | "price_desc" | "discount_desc";
+    };
+  }>("/products", async (request) => {
+    const { marketplace, groupId, status, search, favorite, sort } = request.query;
+    const products = await prisma.capturedProduct.findMany({
+      where: {
+        ...(marketplace ? { marketplace } : {}),
+        ...(groupId ? { sourceGroupId: groupId } : {}),
+        ...(status ? { status } : {}),
+        ...(favorite === "true" ? { favorite: true } : {}),
+        ...(search
+          ? { messageText: { contains: search } }
+          : {}),
+      },
+      orderBy: { capturedAt: "desc" },
+      include: { sourceGroup: { select: { name: true } } },
+    });
+
+    const withDisplay = products.map((p) => ({ ...p, display: extractProductDisplay(p) }));
+
+    switch (sort) {
+      case "price_asc":
+        withDisplay.sort((a, b) => a.display.priceDiscounted - b.display.priceDiscounted);
+        break;
+      case "price_desc":
+        withDisplay.sort((a, b) => b.display.priceDiscounted - a.display.priceDiscounted);
+        break;
+      case "discount_desc":
+        withDisplay.sort((a, b) => b.display.discountPercent - a.display.discountPercent);
+        break;
+      default:
+        break; // ja vem por capturedAt desc
     }
-  );
+
+    return withDisplay;
+  });
+
+  app.patch<{
+    Params: { id: string };
+    Body: {
+      favorite?: boolean;
+      nameOverride?: string | null;
+      priceOriginalOverride?: string | null;
+      priceDiscountedOverride?: string | null;
+      couponOverride?: string | null;
+    };
+  }>("/products/:id", async (request, reply) => {
+    const existing = await prisma.capturedProduct.findUnique({ where: { id: request.params.id } });
+    if (!existing) return reply.code(404).send({ error: "Produto não encontrado." });
+    const updated = await prisma.capturedProduct.update({
+      where: { id: request.params.id },
+      data: request.body,
+    });
+    return { ...updated, display: extractProductDisplay(updated) };
+  });
+
+  app.delete<{ Params: { id: string } }>("/products/:id", async (request, reply) => {
+    const existing = await prisma.capturedProduct.findUnique({ where: { id: request.params.id } });
+    if (!existing) return reply.code(404).send({ error: "Produto não encontrado." });
+    await prisma.capturedProduct.delete({ where: { id: request.params.id } });
+    return { ok: true };
+  });
 
   app.post<{ Body: { url?: string; subIds?: string[] } }>("/links/convert", async (request, reply) => {
     const { url, subIds } = request.body ?? {};
@@ -315,5 +376,35 @@ export async function apiRoutes(app: FastifyInstance) {
         .code(400)
         .send({ error: err instanceof Error ? err.message : "Erro ao atualizar configuração." });
     }
+  });
+
+  // --- Configurações: Plataformas (credenciais de marketplace) ---
+
+  app.get("/settings/platforms", async () => {
+    return getPlatformSettings();
+  });
+
+  app.patch<{
+    Body: {
+      shopeeAppId?: string;
+      shopeeAppSecret?: string;
+      shopeeSubIds?: string;
+      amazonAffiliateTag?: string;
+      mercadoLivreTag?: string;
+    };
+  }>("/settings/platforms", async (request) => {
+    return updatePlatformSettings(request.body);
+  });
+
+  // --- Configurações: Monitoramento automático + avançado ---
+
+  app.get("/settings/monitoring", async () => {
+    return getMonitoringSettings();
+  });
+
+  app.patch<{
+    Body: { restrictedWords?: string; allowedWords?: string; dedupeWindowHours?: number };
+  }>("/settings/monitoring", async (request) => {
+    return updateMonitoringSettings(request.body);
   });
 }

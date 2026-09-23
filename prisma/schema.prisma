@@ -71,6 +71,13 @@ model CapturedProduct {
   priority        Boolean       @default(false)
   // Marcado quando o disparo automatico ja mandou esse produto (evita repetir).
   dispatchedAt    DateTime?
+  favorite        Boolean       @default(false)
+  // Overrides manuais (tela "Editar produto") - tem prioridade sobre o que a
+  // heuristica extrai de messageText quando preenchidos.
+  nameOverride           String?
+  priceOriginalOverride  String?
+  priceDiscountedOverride String?
+  couponOverride         String?
   sourceGroup     WhatsAppGroup @relation(fields: [sourceGroupId], references: [id])
   sourceGroupId   String
   capturedAt      DateTime      @default(now())
@@ -100,6 +107,24 @@ model Session {
   token     String   @id
   expiresAt DateTime
   createdAt DateTime @default(now())
+}
+
+model PlatformSettings {
+  id                 String   @id @default("singleton")
+  shopeeAppId        String   @default("")
+  shopeeAppSecret    String   @default("")
+  shopeeSubIds       String   @default("") // comma-separated
+  amazonAffiliateTag String   @default("")
+  mercadoLivreTag    String   @default("")
+  updatedAt          DateTime @updatedAt
+}
+
+model MonitoringSettings {
+  id                String   @id @default("singleton")
+  restrictedWords   String   @default("") // comma-separated
+  allowedWords      String   @default("") // comma-separated
+  dedupeWindowHours Int      @default(12)
+  updatedAt         DateTime @updatedAt
 }
 
 model AutoDispatchSettings {

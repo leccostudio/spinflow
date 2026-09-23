@@ -1,15 +1,16 @@
-import { env, isAmazonConfigured } from "../config/env.js";
+import { getPlatformSettings, isAmazonConfigured } from "../config/settings.js";
 
 /**
  * Amazon affiliate links don't need API calls: appending the associate tag
  * as a query param is enough for a valid tracked link.
  */
-export function convertAmazonLink(originUrl: string): string {
-  if (!isAmazonConfigured()) {
-    throw new Error("Tag de afiliado da Amazon não configurada (AMAZON_AFFILIATE_TAG no .env).");
+export async function convertAmazonLink(originUrl: string): Promise<string> {
+  if (!(await isAmazonConfigured())) {
+    throw new Error("Tag de afiliado da Amazon não configurada (Configurações > Plataformas).");
   }
 
+  const settings = await getPlatformSettings();
   const url = new URL(originUrl);
-  url.searchParams.set("tag", env.amazon.affiliateTag);
+  url.searchParams.set("tag", settings.amazonAffiliateTag);
   return url.toString();
 }

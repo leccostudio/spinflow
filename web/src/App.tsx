@@ -30,8 +30,8 @@ const sections: Array<{
     ],
   },
   {
-    label: "Automação",
-    links: [{ to: "/configuracoes", label: "Disparo Automático", icon: <Sliders size={16} /> }],
+    label: "Configurações",
+    links: [{ to: "/configuracoes", label: "Configurações", icon: <Sliders size={16} /> }],
   },
 ];
 

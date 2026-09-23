@@ -88,7 +88,7 @@ async function handleMessage(sock: WASocket, message: WAMessage): Promise<void> 
       );
       continue;
     }
-    if (!passesKeywordFilter(text)) {
+    if (!(await passesKeywordFilter(text))) {
       console.log(`[captura] Mensagem bloqueada pelo filtro de palavras.`);
       continue;
     }
