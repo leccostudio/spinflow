@@ -37,10 +37,10 @@ Ver [DEPLOY.md](DEPLOY.md) — Dockerfile e docker-compose já prontos, guia pas
 - [x] **Imagem original** — reaproveita a foto da mensagem capturada (`useOriginalImage` por grupo) em vez de depender de link preview
 - [x] **Sprint 5** — Agendamento (fila própria, checada a cada 30s) + disparo automático com guardrails anti-ban
 - [x] **Sprint 6** — Bot "Grupo de Automação": comandos via WhatsApp (link cru, `preview:`, `converter:`, `salvar:`, `salvar_prioridade:`, `envio:`, `envio_automatico_on/off`)
-- [x] **Painel web** — React/Vite, todas as telas (Visão Geral, Grupos, Produtos, Templates, Agendamentos, Disparo Automático)
+- [x] **Painel web** — React/Vite, todas as telas (Visão Geral, Contas, Grupos, Produtos, Templates, Agendamentos, Disparo Automático)
 - [x] **Autenticação** — senha + sessão em cookie httpOnly, toda a API protegida
 - [x] **Deploy** — Dockerfile + docker-compose, guia de VPS
-- [ ] **Segundo número de WhatsApp / failover** — ainda não implementado (item 4 do plano)
+- [x] **Múltiplas contas WhatsApp / failover por grupo** — gerenciador multi-conta, conta de backup configurável por grupo (precisa de um segundo chip físico pra escanear — código pronto, falta você conectar o número)
 
 ## ⚠️ Antes de ativar disparo automático ou o bot de comandos
 
@@ -72,10 +72,12 @@ As duas funcionalidades abaixo **enviam mensagens de verdade pros seus grupos re
 | POST | `/api/auth/logout` | Encerra a sessão |
 | GET | `/api/auth/status` | `{ authenticated }` |
 | GET | `/api/health` | Healthcheck |
-| GET | `/api/whatsapp/status` | Status da conexão WhatsApp |
+| GET | `/api/whatsapp/status` | Status da primeira conta WhatsApp |
+| GET | `/api/whatsapp/accounts` | Lista todas as contas/números conectados |
+| POST | `/api/whatsapp/accounts` | `{ name }` — inicia uma nova conta (QR aparece nos logs do servidor) |
 | GET | `/api/whatsapp/groups` | Lista grupos sincronizados |
-| POST | `/api/whatsapp/groups/sync` | Força sincronização da lista de grupos do WhatsApp conectado |
-| PATCH | `/api/whatsapp/groups/:id` | Atualiza `isMonitoring` / `isSending` / `monitoredMarketplaces` / `useOriginalImage` / `isAutomationGroup` |
+| POST | `/api/whatsapp/groups/sync` | Força sincronização (`{ accountId? }`, padrão = primeira conta) |
+| PATCH | `/api/whatsapp/groups/:id` | Atualiza `isMonitoring` / `isSending` / `monitoredMarketplaces` / `useOriginalImage` / `isAutomationGroup` / `backupAccountId` |
 | POST | `/api/links/convert` | Converte um link (`{ url, subIds? }`) pro marketplace detectado |
 | GET | `/api/products` | Lista produtos capturados (filtros: `?marketplace=`, `?groupId=`, `?status=`) |
 | GET/POST | `/api/templates` | Lista / cria templates de mensagem |
@@ -125,7 +127,7 @@ Condicionais (Handlebars — sintaxe diferente do BuboFlow original, mais fácil
 
 ## Limitações conhecidas / próximos passos possíveis
 
-- **Um único número de WhatsApp, sem failover.** Se o número tomar ban, o sistema para até reconectar manualmente — sem plano B automático ainda.
+- **Failover precisa de um segundo chip físico.** O código já suporta múltiplas contas e troca automaticamente pra conta de backup se a principal cair — mas isso só funciona se esse segundo número já for membro do grupo de verdade no WhatsApp (não dá pra automatizar essa parte, é uma ação sua: comprar um chip e adicionar o número aos grupos).
 - **Mercado Livre**: conversão de link ainda é manual (sem API pública simples — o original usa uma extensão de navegador pra capturar token, não implementada aqui).
 - **Preço/nome de produto**: extraídos por heurística de regex sobre o texto capturado, não por API oficial de dados de produto — funciona bem no formato comum ("Nome\n\nDe R$X por R$Y\n\nCupom: Z"), mas não é 100% garantido.
 - **`preview:` do bot**: como não temos API de dados de produto, o preview reflete só o que dá pra extrair do próprio link — sem contexto de mensagem (nome/preço), o resultado fica genérico.
