@@ -83,6 +83,7 @@ export interface PlatformSettings {
   shopeeSubIds: string;
   amazonAffiliateTag: string;
   mercadoLivreTag: string;
+  mercadoLivreCode: string;
 }
 
 export interface MonitoringSettings {

@@ -115,7 +115,10 @@ model PlatformSettings {
   shopeeAppSecret    String   @default("")
   shopeeSubIds       String   @default("") // comma-separated
   amazonAffiliateTag String   @default("")
+  // matt_word - https://mercadolivre.com/...?matt_word=X&matt_tool=Y
   mercadoLivreTag    String   @default("")
+  // matt_tool - codigo numerico do cadastro de afiliado, confirmado via link real gerado no portal
+  mercadoLivreCode   String   @default("")
   updatedAt          DateTime @updatedAt
 }
 

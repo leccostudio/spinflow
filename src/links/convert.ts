@@ -24,14 +24,8 @@ export async function convertLink(originUrl: string, subIds?: string[]): Promise
       return { marketplace, originalUrl: originUrl, affiliateUrl, method: "tag" };
     }
     case "mercadolivre": {
-      const { url } = convertMercadoLivreLink(originUrl);
-      return {
-        marketplace,
-        originalUrl: originUrl,
-        affiliateUrl: url,
-        method: "manual",
-        note: "Mercado Livre ainda não tem conversão automática neste MVP — converta manualmente no portal de afiliados do ML e cole o link resultante.",
-      };
+      const affiliateUrl = await convertMercadoLivreLink(originUrl);
+      return { marketplace, originalUrl: originUrl, affiliateUrl, method: "tag" };
     }
     default:
       throw new Error(`Não foi possível identificar o marketplace do link: ${originUrl}`);

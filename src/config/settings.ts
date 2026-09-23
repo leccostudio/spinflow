@@ -24,6 +24,7 @@ export async function updatePlatformSettings(input: {
   shopeeSubIds?: string;
   amazonAffiliateTag?: string;
   mercadoLivreTag?: string;
+  mercadoLivreCode?: string;
 }) {
   await getPlatformSettings();
   return prisma.platformSettings.update({ where: { id: ID }, data: input });
@@ -37,6 +38,11 @@ export async function isShopeeConfigured(): Promise<boolean> {
 export async function isAmazonConfigured(): Promise<boolean> {
   const s = await getPlatformSettings();
   return Boolean(s.amazonAffiliateTag);
+}
+
+export async function isMercadoLivreConfigured(): Promise<boolean> {
+  const s = await getPlatformSettings();
+  return Boolean(s.mercadoLivreTag && s.mercadoLivreCode);
 }
 
 export async function getShopeeSubIds(): Promise<string[]> {

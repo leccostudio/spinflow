@@ -78,12 +78,18 @@ export default function Platforms() {
       <div className="card">
         <h2>🛍 Mercado Livre</h2>
         <p style={{ fontSize: 13, color: "#6b7280", marginTop: -8 }}>
-          Conversão automática ainda não implementada neste MVP — esse campo fica reservado. Converta manualmente
-          no portal de afiliados do ML por enquanto.
+          Gere um link qualquer no portal de afiliados do ML (Ferramentas → Gerador de Link) e olhe os parâmetros{" "}
+          <code>matt_word</code> e <code>matt_tool</code> na URL gerada — são fixos, não muda a cada link.
         </p>
-        <div className="field">
-          <label>Tag</label>
-          <input type="text" {...field("mercadoLivreTag")} placeholder="Ex.: promospin" />
+        <div className="grid-2">
+          <div className="field">
+            <label>Tag (matt_word)</label>
+            <input type="text" {...field("mercadoLivreTag")} placeholder="Ex.: promospin" />
+          </div>
+          <div className="field">
+            <label>Código (matt_tool)</label>
+            <input type="text" {...field("mercadoLivreCode")} placeholder="Ex.: 39250867" />
+          </div>
         </div>
       </div>
 
