@@ -1,0 +1,12 @@
+services:
+  spinflow:
+    build: .
+    # So escuta em localhost por padrao - acesse via tunel SSH (mais seguro,
+    # sem precisar de dominio/HTTPS). Ver README > Deploy pra outras opcoes.
+    ports:
+      - "127.0.0.1:3333:3333"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

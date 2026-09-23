@@ -4,23 +4,31 @@ Sistema próprio de automação de ofertas para grupos de WhatsApp — uso pesso
 
 ## Stack
 
-- Node.js + TypeScript + Fastify
+- Node.js + TypeScript + Fastify (API em `/api`)
+- React + Vite + TypeScript (painel web, servido pelo próprio Fastify em produção)
 - Prisma + SQLite (banco em arquivo, `data/spinflow.db`)
 - Baileys (conexão não-oficial com WhatsApp)
 
-## Setup
+## Setup local
 
 ```bash
 npm install
 npx prisma migrate dev
+npm run build:web   # builda o painel (web/dist) - so precisa refazer quando mexer no frontend
 npm run dev
 ```
 
+Acesse `http://localhost:3333` — vai pedir a senha definida em `AUTH_PASSWORD` no `.env`.
+
 Na primeira execução, um QR code aparece no terminal. Escaneie em **WhatsApp > Aparelhos conectados > Conectar aparelho**. A sessão fica salva em `data/auth/` (não versionar — já está no `.gitignore`; equivale a estar logado na sua conta).
 
-**Importante ao reiniciar o dev server**: sempre pare o processo anterior antes de subir um novo (`npm run dev` em cima de outro já rodando causa dois processos escutando a mesma sessão do WhatsApp e comportamento inconsistente — isso já aconteceu uma vez nesta sessão de desenvolvimento).
+**Importante ao reiniciar o dev server**: sempre pare o processo anterior antes de subir um novo (`npm run dev` em cima de outro já rodando causa dois processos escutando a mesma sessão do WhatsApp e comportamento inconsistente — isso já aconteceu nesta sessão de desenvolvimento).
 
-## Estado atual — MVP completo
+## Deploy em servidor (VPS)
+
+Ver [DEPLOY.md](DEPLOY.md) — Dockerfile e docker-compose já prontos, guia passo a passo do que falta fazer no provedor de VPS (isso só você pode fazer, exige conta/pagamento).
+
+## Estado atual — MVP completo + operação
 
 - [x] **Sprint 1** — Servidor Fastify + Prisma/SQLite, conexão WhatsApp via Baileys (QR pairing, reconexão automática), sincronização e toggle de grupos
 - [x] **Sprint 2** — Conversão de link: Shopee (API oficial, assinatura SHA256), Amazon (tag na URL), Mercado Livre (manual)
@@ -29,20 +37,25 @@ Na primeira execução, um QR code aparece no terminal. Escaneie em **WhatsApp >
 - [x] **Imagem original** — reaproveita a foto da mensagem capturada (`useOriginalImage` por grupo) em vez de depender de link preview
 - [x] **Sprint 5** — Agendamento (fila própria, checada a cada 30s) + disparo automático com guardrails anti-ban
 - [x] **Sprint 6** — Bot "Grupo de Automação": comandos via WhatsApp (link cru, `preview:`, `converter:`, `salvar:`, `salvar_prioridade:`, `envio:`, `envio_automatico_on/off`)
+- [x] **Painel web** — React/Vite, todas as telas (Visão Geral, Grupos, Produtos, Templates, Agendamentos, Disparo Automático)
+- [x] **Autenticação** — senha + sessão em cookie httpOnly, toda a API protegida
+- [x] **Deploy** — Dockerfile + docker-compose, guia de VPS
+- [ ] **Segundo número de WhatsApp / failover** — ainda não implementado (item 4 do plano)
 
 ## ⚠️ Antes de ativar disparo automático ou o bot de comandos
 
-As duas funcionalidades abaixo **enviam mensagens de verdade pros seus grupos reais** (o #07 tem 264 pessoas) sem supervisão manual a cada envio. Por isso, **ficam desligadas por padrão**:
+As duas funcionalidades abaixo **enviam mensagens de verdade pros seus grupos reais** (o #07 tem 266+ pessoas) sem supervisão manual a cada envio. Por isso, **ficam desligadas por padrão**:
 
-- **Disparo automático**: `AutoDispatchSettings.enabled = false` até você ativar via `PATCH /auto-dispatch { "enabled": true }` (ou o comando `envio_automatico_on` depois que o bot estiver configurado).
-- **Bot do Grupo de Automação**: nenhum grupo tem `isAutomationGroup = true` por padrão. Ele só reage a mensagens no grupo que você designar via `PATCH /whatsapp/groups/:id { "isAutomationGroup": true }`. Sem isso configurado, o listener existe mas não tem onde escutar — inerte por construção.
+- **Disparo automático**: ativa pela tela "Disparo Automático" do painel, ou via `PATCH /api/auto-dispatch { "enabled": true }`.
+- **Bot do Grupo de Automação**: designe um grupo na tela "Grupos" do painel (toggle "Automação"), ou via `PATCH /api/whatsapp/groups/:id { "isAutomationGroup": true }`. Sem isso configurado, o listener existe mas não tem onde escutar — inerte por construção.
 
-**Recomendação**: na primeira vez que for ativar cada um, fique de olho no grupo #08 (só 2 participantes) antes de confiar no #07 com a audiência real.
+**Recomendação**: na primeira vez que for ativar cada um, fique de olho no grupo #08 (poucos participantes) antes de confiar num grupo com audiência real.
 
 ## Configuração (`.env`)
 
 | Variável | Uso |
 |---|---|
+| `AUTH_PASSWORD` | Senha de login do painel. **Troque antes de expor o servidor na internet** — veja DEPLOY.md |
 | `SHOPEE_APP_ID` / `SHOPEE_APP_SECRET` | Credenciais da API de afiliados Shopee |
 | `SHOPEE_SUB_IDS` | Até 5 sub-ids de rastreio, separados por vírgula |
 | `AMAZON_AFFILIATE_TAG` | Tag de associado Amazon |
@@ -51,24 +64,29 @@ As duas funcionalidades abaixo **enviam mensagens de verdade pros seus grupos re
 | `ALLOWED_WORDS` | Se preenchido, só captura mensagens com pelo menos uma dessas palavras |
 | `DEDUPE_WINDOW_HOURS` | Janela de horas pra evitar capturar o mesmo produto de novo (padrão 12; `0` desativa) |
 
-## Endpoints disponíveis
+## Endpoints disponíveis (todos sob `/api`, exceto `/api/auth/*`, exigem sessão)
 
 | Método | Rota | Descrição |
 |---|---|---|
-| GET | `/health` | Healthcheck |
-| GET | `/whatsapp/status` | Status da conexão WhatsApp |
-| GET | `/whatsapp/groups` | Lista grupos sincronizados |
-| POST | `/whatsapp/groups/sync` | Força sincronização da lista de grupos do WhatsApp conectado |
-| PATCH | `/whatsapp/groups/:id` | Atualiza `isMonitoring` / `isSending` / `monitoredMarketplaces` / `useOriginalImage` / `isAutomationGroup` |
-| POST | `/links/convert` | Converte um link (`{ url, subIds? }`) pro marketplace detectado |
-| GET | `/products` | Lista produtos capturados (filtros: `?marketplace=`, `?groupId=`, `?status=`) |
-| GET/POST | `/templates` | Lista / cria templates de mensagem |
-| PATCH/DELETE | `/templates/:id` | Atualiza / remove um template |
-| POST | `/templates/:id/preview` | Renderiza um template contra um produto (`{ productId }`), sem enviar |
-| POST | `/messages/send` | Envia mensagem pros grupos agora (`{ groupIds, text }` ou `{ groupIds, productId, templateId? }`) |
-| GET/POST | `/messages/scheduled` | Lista / cria agendamento (`{ groupIds, scheduledAt (ISO), text }` ou `productId`) |
-| DELETE | `/messages/scheduled/:id` | Cancela um agendamento pendente |
-| GET/PATCH | `/auto-dispatch` | Lê / atualiza config do disparo automático (guardrails aplicados no PATCH) |
+| POST | `/api/auth/login` | `{ password }` — cria sessão, seta cookie |
+| POST | `/api/auth/logout` | Encerra a sessão |
+| GET | `/api/auth/status` | `{ authenticated }` |
+| GET | `/api/health` | Healthcheck |
+| GET | `/api/whatsapp/status` | Status da conexão WhatsApp |
+| GET | `/api/whatsapp/groups` | Lista grupos sincronizados |
+| POST | `/api/whatsapp/groups/sync` | Força sincronização da lista de grupos do WhatsApp conectado |
+| PATCH | `/api/whatsapp/groups/:id` | Atualiza `isMonitoring` / `isSending` / `monitoredMarketplaces` / `useOriginalImage` / `isAutomationGroup` |
+| POST | `/api/links/convert` | Converte um link (`{ url, subIds? }`) pro marketplace detectado |
+| GET | `/api/products` | Lista produtos capturados (filtros: `?marketplace=`, `?groupId=`, `?status=`) |
+| GET/POST | `/api/templates` | Lista / cria templates de mensagem |
+| PATCH/DELETE | `/api/templates/:id` | Atualiza / remove um template |
+| POST | `/api/templates/:id/preview` | Renderiza um template contra um produto (`{ productId }`), sem enviar |
+| POST | `/api/messages/send` | Envia mensagem pros grupos agora (`{ groupIds, text }` ou `{ groupIds, productId, templateId? }`) |
+| GET/POST | `/api/messages/scheduled` | Lista / cria agendamento (`{ groupIds, scheduledAt (ISO), text }` ou `productId`) |
+| DELETE | `/api/messages/scheduled/:id` | Cancela um agendamento pendente |
+| GET/PATCH | `/api/auto-dispatch` | Lê / atualiza config do disparo automático (guardrails aplicados no PATCH) |
+
+Imagens capturadas ficam em `GET /media/<arquivo>` (sem autenticação — risco baixo, nome de arquivo é um UUID aleatório).
 
 ## Guardrails do disparo automático
 
@@ -107,7 +125,10 @@ Condicionais (Handlebars — sintaxe diferente do BuboFlow original, mais fácil
 
 ## Limitações conhecidas / próximos passos possíveis
 
+- **Um único número de WhatsApp, sem failover.** Se o número tomar ban, o sistema para até reconectar manualmente — sem plano B automático ainda.
 - **Mercado Livre**: conversão de link ainda é manual (sem API pública simples — o original usa uma extensão de navegador pra capturar token, não implementada aqui).
 - **Preço/nome de produto**: extraídos por heurística de regex sobre o texto capturado, não por API oficial de dados de produto — funciona bem no formato comum ("Nome\n\nDe R$X por R$Y\n\nCupom: Z"), mas não é 100% garantido.
 - **`preview:` do bot**: como não temos API de dados de produto, o preview reflete só o que dá pra extrair do próprio link — sem contexto de mensagem (nome/preço), o resultado fica genérico.
+- **`/media` sem autenticação** — baixo risco (nomes de arquivo são UUIDs), mas vale saber.
+- **Sessão expira sem redirecionamento automático** — se a sessão do painel expirar (30 dias) no meio do uso, as telas mostram erro em vez de voltar pro login sozinhas; precisa recarregar a página.
 - Relatórios (envios, monitor de membros) e reescrita de CTA via IA não foram implementados — item "fase 7" do roadmap original, não essencial pro funcionamento.
