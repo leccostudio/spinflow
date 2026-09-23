@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { api, type WhatsAppGroup } from "../api";
+import { api, type WhatsAppGroup, type WhatsAppAccount } from "../api";
 
 const MARKETPLACES = ["shopee", "amazon", "mercadolivre"];
 
@@ -14,6 +14,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 
 export default function Groups() {
   const [groups, setGroups] = useState<WhatsAppGroup[]>([]);
+  const [accounts, setAccounts] = useState<WhatsAppAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -22,15 +23,16 @@ export default function Groups() {
   function load() {
     setLoading(true);
     api.groups().then(setGroups).catch((e) => setError(e.message)).finally(() => setLoading(false));
+    api.accounts().then(setAccounts).catch(() => {});
   }
 
   useEffect(load, []);
 
   async function update(
     id: string,
-    body: Partial<Pick<WhatsAppGroup, "isMonitoring" | "isSending" | "useOriginalImage" | "isAutomationGroup">> & {
-      monitoredMarketplaces?: string[];
-    }
+    body: Partial<
+      Pick<WhatsAppGroup, "isMonitoring" | "isSending" | "useOriginalImage" | "isAutomationGroup">
+    > & { monitoredMarketplaces?: string[]; backupAccountId?: string | null }
   ) {
     setError("");
     try {
@@ -60,6 +62,10 @@ export default function Groups() {
     update(group.id, { monitoredMarketplaces: next });
   }
 
+  function accountName(id: string) {
+    return accounts.find((a) => a.id === id)?.name ?? "?";
+  }
+
   if (loading) return <p className="empty">Carregando...</p>;
 
   return (
@@ -67,7 +73,7 @@ export default function Groups() {
       <div className="row">
         <div style={{ flex: 1 }}>
           <h1>Grupos</h1>
-          <p className="subtitle">Monitoramento, envio e o grupo de automação (comandos)</p>
+          <p className="subtitle">Monitoramento, envio, grupo de automação e conta de backup por grupo</p>
         </div>
         <button className="secondary" onClick={sync} disabled={syncing}>
           {syncing ? "Sincronizando..." : "🔄 Sincronizar"}
@@ -93,7 +99,10 @@ export default function Groups() {
                 <tr>
                   <td>
                     <div style={{ fontWeight: 500 }}>{g.name}</div>
-                    <div style={{ fontSize: 12, color: "#6b7280" }}>{g.participantsCount} membros</div>
+                    <div style={{ fontSize: 12, color: "#6b7280" }}>
+                      {g.participantsCount} membros · via {accountName(g.accountId)}
+                      {g.backupAccountId && ` · backup: ${accountName(g.backupAccountId)}`}
+                    </div>
                   </td>
                   <td><Toggle checked={g.isMonitoring} onChange={(v) => update(g.id, { isMonitoring: v })} /></td>
                   <td><Toggle checked={g.isSending} onChange={(v) => update(g.id, { isSending: v })} /></td>
@@ -104,41 +113,64 @@ export default function Groups() {
                     />
                   </td>
                   <td>
-                    {g.isMonitoring && (
-                      <button className="secondary" onClick={() => setExpanded(expanded === g.id ? null : g.id)}>
-                        {expanded === g.id ? "Fechar" : "Filtros"}
-                      </button>
-                    )}
+                    <button className="secondary" onClick={() => setExpanded(expanded === g.id ? null : g.id)}>
+                      {expanded === g.id ? "Fechar" : "Mais"}
+                    </button>
                   </td>
                 </tr>
                 {expanded === g.id && (
                   <tr>
                     <td colSpan={5} style={{ background: "var(--bg)" }}>
-                      <div className="row wrap" style={{ gap: 16 }}>
-                        <div>
-                          <label>Marketplaces monitorados (vazio = todos)</label>
-                          <div className="row wrap" style={{ gap: 10 }}>
-                            {MARKETPLACES.map((mk) => {
-                              const active = (g.monitoredMarketplaces || "").split(",").includes(mk);
-                              return (
-                                <label key={mk} className="row" style={{ gap: 4, fontSize: 13 }}>
-                                  <input
-                                    type="checkbox"
-                                    checked={active}
-                                    onChange={() => toggleMarketplace(g, mk)}
-                                  />
-                                  {mk}
-                                </label>
-                              );
-                            })}
+                      <div className="row wrap" style={{ gap: 24 }}>
+                        {g.isMonitoring && (
+                          <div>
+                            <label>Marketplaces monitorados (vazio = todos)</label>
+                            <div className="row wrap" style={{ gap: 10 }}>
+                              {MARKETPLACES.map((mk) => {
+                                const active = (g.monitoredMarketplaces || "").split(",").includes(mk);
+                                return (
+                                  <label key={mk} className="row" style={{ gap: 4, fontSize: 13 }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={active}
+                                      onChange={() => toggleMarketplace(g, mk)}
+                                    />
+                                    {mk}
+                                  </label>
+                                );
+                              })}
+                            </div>
                           </div>
-                        </div>
-                        <div className="row" style={{ gap: 6 }}>
-                          <label style={{ marginBottom: 0 }}>Usar imagem do grupo</label>
-                          <Toggle
-                            checked={g.useOriginalImage}
-                            onChange={(v) => update(g.id, { useOriginalImage: v })}
-                          />
+                        )}
+                        {g.isMonitoring && (
+                          <div className="row" style={{ gap: 6 }}>
+                            <label style={{ marginBottom: 0 }}>Usar imagem do grupo</label>
+                            <Toggle
+                              checked={g.useOriginalImage}
+                              onChange={(v) => update(g.id, { useOriginalImage: v })}
+                            />
+                          </div>
+                        )}
+                        <div style={{ minWidth: 220 }}>
+                          <label>Conta de backup (failover no envio)</label>
+                          <select
+                            value={g.backupAccountId ?? ""}
+                            onChange={(e) =>
+                              update(g.id, { backupAccountId: e.target.value || null })
+                            }
+                          >
+                            <option value="">Nenhuma</option>
+                            {accounts
+                              .filter((a) => a.id !== g.accountId)
+                              .map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.name} ({a.status === "CONNECTED" ? "conectada" : "offline"})
+                                </option>
+                              ))}
+                          </select>
+                          <p style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+                            Só funciona se essa conta também for membro deste grupo no WhatsApp.
+                          </p>
                         </div>
                       </div>
                     </td>

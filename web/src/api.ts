@@ -26,6 +26,13 @@ export interface WhatsAppStatus {
   status: "DISCONNECTED" | "CONNECTING" | "CONNECTED";
 }
 
+export interface WhatsAppAccount {
+  id: string;
+  name: string;
+  phoneNumber: string | null;
+  status: "DISCONNECTED" | "CONNECTING" | "CONNECTED";
+}
+
 export interface WhatsAppGroup {
   id: string;
   jid: string;
@@ -36,6 +43,8 @@ export interface WhatsAppGroup {
   useOriginalImage: boolean;
   isAutomationGroup: boolean;
   participantsCount: number;
+  accountId: string;
+  backupAccountId: string | null;
 }
 
 export interface CapturedProduct {
@@ -88,13 +97,17 @@ export interface AutoDispatchSettings {
 
 export const api = {
   whatsappStatus: () => request<WhatsAppStatus>("/whatsapp/status"),
+  accounts: () => request<WhatsAppAccount[]>("/whatsapp/accounts"),
+  createAccount: (name: string) =>
+    request<{ message: string }>("/whatsapp/accounts", { method: "POST", body: JSON.stringify({ name }) }),
   groups: () => request<WhatsAppGroup[]>("/whatsapp/groups"),
-  syncGroups: () => request<{ count: number }>("/whatsapp/groups/sync", { method: "POST" }),
+  syncGroups: (accountId?: string) =>
+    request<{ count: number }>("/whatsapp/groups/sync", { method: "POST", body: JSON.stringify({ accountId }) }),
   updateGroup: (
     id: string,
-    body: Partial<Pick<WhatsAppGroup, "isMonitoring" | "isSending" | "useOriginalImage" | "isAutomationGroup">> & {
-      monitoredMarketplaces?: string[];
-    }
+    body: Partial<
+      Pick<WhatsAppGroup, "isMonitoring" | "isSending" | "useOriginalImage" | "isAutomationGroup">
+    > & { monitoredMarketplaces?: string[]; backupAccountId?: string | null }
   ) => request<WhatsAppGroup>(`/whatsapp/groups/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
   products: (params?: { marketplace?: string; groupId?: string; status?: string }) => {

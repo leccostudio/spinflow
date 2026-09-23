@@ -5,6 +5,7 @@ import "./index.css";
 import App from "./App.tsx";
 import Login from "./Login.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
+import Accounts from "./pages/Accounts.tsx";
 import Groups from "./pages/Groups.tsx";
 import Products from "./pages/Products.tsx";
 import Templates from "./pages/Templates.tsx";
@@ -30,6 +31,7 @@ function Root() {
       <Routes>
         <Route element={<App onLogout={() => setAuthenticated(false)} />}>
           <Route index element={<Dashboard />} />
+          <Route path="contas" element={<Accounts />} />
           <Route path="grupos" element={<Groups />} />
           <Route path="produtos" element={<Products />} />
           <Route path="templates" element={<Templates />} />

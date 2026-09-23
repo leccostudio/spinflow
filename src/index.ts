@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { buildServer } from "./api/server.js";
-import { startWhatsApp } from "./whatsapp/baileys.js";
+import { startAllAccounts } from "./whatsapp/baileys.js";
 import { seedDefaultTemplate } from "./templates/seed.js";
 import { startScheduledMessageLoop } from "./scheduler/scheduled.js";
 import { startAutoDispatchLoop } from "./scheduler/autoDispatch.js";
@@ -14,7 +14,7 @@ async function main() {
   await app.listen({ port: PORT, host: "0.0.0.0" });
   console.log(`API rodando em http://localhost:${PORT}`);
 
-  await startWhatsApp();
+  await startAllAccounts();
 
   startScheduledMessageLoop();
   startAutoDispatchLoop(); // no-op enquanto AutoDispatchSettings.enabled = false (padrão)

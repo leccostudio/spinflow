@@ -17,7 +17,8 @@ model WhatsAppAccount {
   authDir     String
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
-  groups      WhatsAppGroup[]
+  groups      WhatsAppGroup[] @relation("PrimaryAccount")
+  backupFor   WhatsAppGroup[] @relation("BackupAccount")
 }
 
 model WhatsAppGroup {
@@ -34,8 +35,11 @@ model WhatsAppGroup {
   isAutomationGroup Boolean           @default(false)
   participantsCount Int               @default(0)
   lastSyncedAt      DateTime          @default(now())
-  account           WhatsAppAccount   @relation(fields: [accountId], references: [id])
+  account           WhatsAppAccount   @relation("PrimaryAccount", fields: [accountId], references: [id])
   accountId         String
+  // Se a conta principal cair, envio tenta essa conta (precisa ja ser membro do mesmo grupo).
+  backupAccount     WhatsAppAccount?  @relation("BackupAccount", fields: [backupAccountId], references: [id])
+  backupAccountId   String?
   capturedProducts  CapturedProduct[]
 }
 

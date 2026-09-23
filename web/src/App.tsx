@@ -3,6 +3,7 @@ import { api } from "./api";
 
 const links = [
   { to: "/", label: "Visão Geral", end: true },
+  { to: "/contas", label: "Contas WhatsApp" },
   { to: "/grupos", label: "Grupos" },
   { to: "/produtos", label: "Produtos" },
   { to: "/templates", label: "Templates" },

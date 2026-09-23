@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../db/client.js";
-import { getSocket } from "../whatsapp/baileys.js";
+import { getSocketForAccount, startAccount } from "../whatsapp/baileys.js";
 import { syncGroups } from "../whatsapp/groups.js";
 import { convertLink } from "../links/convert.js";
 import { renderProductWithTemplate } from "../templates/service.js";
@@ -16,21 +16,44 @@ export async function apiRoutes(app: FastifyInstance) {
     return account ?? { status: "DISCONNECTED" };
   });
 
+  // --- Contas WhatsApp (multi-numero / failover) ---
+
+  app.get("/whatsapp/accounts", async () => {
+    return prisma.whatsAppAccount.findMany({ orderBy: { createdAt: "asc" } });
+  });
+
+  app.post<{ Body: { name?: string } }>("/whatsapp/accounts", async (request, reply) => {
+    const { name } = request.body ?? {};
+    if (!name || !name.trim()) {
+      return reply.code(400).send({ error: "Campo 'name' é obrigatório." });
+    }
+    const existing = await prisma.whatsAppAccount.findFirst({ where: { name: name.trim() } });
+    if (existing) {
+      return reply.code(409).send({ error: "Já existe uma conta com esse nome." });
+    }
+
+    // Nao espera a conexao completar (QR aparece nos logs do servidor) - so dispara.
+    startAccount(name.trim()).catch((err) => console.error("Falha ao iniciar conta:", err));
+    return reply.code(202).send({ message: `Conta "${name}" sendo iniciada — veja o QR nos logs do servidor.` });
+  });
+
   app.get("/whatsapp/groups", async () => {
     return prisma.whatsAppGroup.findMany({ orderBy: { name: "asc" } });
   });
 
-  app.post("/whatsapp/groups/sync", async (_request, reply) => {
-    const account = await prisma.whatsAppAccount.findFirst({ orderBy: { createdAt: "asc" } });
+  app.post<{ Body: { accountId?: string } }>("/whatsapp/groups/sync", async (request, reply) => {
+    const { accountId } = request.body ?? {};
+    const account = accountId
+      ? await prisma.whatsAppAccount.findUnique({ where: { id: accountId } })
+      : await prisma.whatsAppAccount.findFirst({ orderBy: { createdAt: "asc" } });
     if (!account) {
       return reply.code(409).send({ error: "Nenhuma conta WhatsApp inicializada ainda." });
     }
-    try {
-      const sock = getSocket();
-      return await syncGroups(account.id, sock);
-    } catch {
-      return reply.code(503).send({ error: "WhatsApp ainda não conectado." });
+    const sock = getSocketForAccount(account.id);
+    if (!sock) {
+      return reply.code(503).send({ error: `Conta "${account.name}" não está conectada.` });
     }
+    return syncGroups(account.id, sock);
   });
 
   app.patch<{
@@ -41,14 +64,24 @@ export async function apiRoutes(app: FastifyInstance) {
       monitoredMarketplaces?: string[];
       useOriginalImage?: boolean;
       isAutomationGroup?: boolean;
+      backupAccountId?: string | null;
     };
   }>("/whatsapp/groups/:id", async (request, reply) => {
     const { id } = request.params;
-    const { isMonitoring, isSending, monitoredMarketplaces, useOriginalImage, isAutomationGroup } =
-      request.body;
+    const {
+      isMonitoring,
+      isSending,
+      monitoredMarketplaces,
+      useOriginalImage,
+      isAutomationGroup,
+      backupAccountId,
+    } = request.body;
     const group = await prisma.whatsAppGroup.findUnique({ where: { id } });
     if (!group) {
       return reply.code(404).send({ error: "Grupo não encontrado." });
+    }
+    if (backupAccountId && backupAccountId === group.accountId) {
+      return reply.code(400).send({ error: "A conta de backup não pode ser a mesma que a principal." });
     }
 
     // So um grupo pode ser o "Grupo de Automação" por vez.
@@ -69,6 +102,7 @@ export async function apiRoutes(app: FastifyInstance) {
           : {}),
         ...(useOriginalImage !== undefined ? { useOriginalImage } : {}),
         ...(isAutomationGroup !== undefined ? { isAutomationGroup } : {}),
+        ...(backupAccountId !== undefined ? { backupAccountId } : {}),
       },
     });
   });

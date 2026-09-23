@@ -1,7 +1,7 @@
 import { getUrlInfo } from "@whiskeysockets/baileys";
 import { readFile } from "node:fs/promises";
 import { prisma } from "../db/client.js";
-import { getSocket } from "../whatsapp/baileys.js";
+import { getSocketForAccount } from "../whatsapp/baileys.js";
 import { detectMarketplace } from "../links/detect.js";
 
 export interface SendResult {
@@ -45,7 +45,6 @@ export async function sendTextToGroups(
   options: SendOptions = {}
 ): Promise<SendResult[]> {
   const groups = await prisma.whatsAppGroup.findMany({ where: { id: { in: groupIds } } });
-  const sock = getSocket();
 
   // Imagem original do grupo monitorado tem prioridade sobre link preview
   // gerado a partir da URL (mais confiável — não depende de tags og: que a
@@ -64,12 +63,33 @@ export async function sendTextToGroups(
   const results: SendResult[] = [];
   for (const group of groups) {
     try {
+      // Tenta a conta principal do grupo; se estiver desconectada, cai pra
+      // conta de backup (se configurada e tambem conectada).
+      let sock = getSocketForAccount(group.accountId);
+      let usedBackup = false;
+      if (!sock && group.backupAccountId) {
+        sock = getSocketForAccount(group.backupAccountId);
+        usedBackup = true;
+      }
+      if (!sock) {
+        throw new Error(
+          group.backupAccountId
+            ? "Nem a conta principal nem a de backup deste grupo estão conectadas."
+            : "A conta WhatsApp deste grupo não está conectada (configure uma conta de backup para failover)."
+        );
+      }
+
       if (imageBuffer) {
         await sock.sendMessage(group.jid, { image: imageBuffer, caption: text });
       } else {
         await sock.sendMessage(group.jid, { text, linkPreview });
       }
-      results.push({ groupId: group.id, groupName: group.name, jid: group.jid, success: true });
+      results.push({
+        groupId: group.id,
+        groupName: group.name + (usedBackup ? " (via backup)" : ""),
+        jid: group.jid,
+        success: true,
+      });
     } catch (err) {
       results.push({
         groupId: group.id,

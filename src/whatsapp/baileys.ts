@@ -12,34 +12,40 @@ import { syncGroups } from "./groups.js";
 import { registerCaptureListener } from "../capture/listener.js";
 import { registerAutomationListener } from "../automation/listener.js";
 
-const ACCOUNT_NAME = "default";
-const AUTH_DIR = path.join(process.cwd(), "data", "auth", ACCOUNT_NAME);
-
 const logger = pino({ level: "silent" });
+const sockets = new Map<string, WASocket>();
 
-let sock: WASocket | undefined;
-let accountId: string | undefined;
+function authDirFor(name: string): string {
+  return path.join(process.cwd(), "data", "auth", name);
+}
 
-async function ensureAccountRow(): Promise<string> {
-  const existing = await prisma.whatsAppAccount.findFirst({ where: { name: ACCOUNT_NAME } });
+async function ensureAccountRow(name: string): Promise<string> {
+  const existing = await prisma.whatsAppAccount.findFirst({ where: { name } });
   if (existing) return existing.id;
   const created = await prisma.whatsAppAccount.create({
-    data: { name: ACCOUNT_NAME, authDir: AUTH_DIR, status: "DISCONNECTED" },
+    data: { name, authDir: authDirFor(name), status: "DISCONNECTED" },
   });
   return created.id;
 }
 
-export function getSocket(): WASocket {
-  if (!sock) throw new Error("WhatsApp socket ainda não foi inicializado.");
-  return sock;
+/** Socket de uma conta especifica (precisa estar conectada). */
+export function getSocketForAccount(accountId: string): WASocket | undefined {
+  return sockets.get(accountId);
 }
 
-export async function startWhatsApp(): Promise<void> {
-  accountId = await ensureAccountRow();
-  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+/** Qualquer conta conectada — usado onde a conta especifica nao importa. */
+export function getSocket(): WASocket {
+  const first = sockets.values().next();
+  if (first.done) throw new Error("Nenhuma conta WhatsApp conectada ainda.");
+  return first.value;
+}
+
+async function connectAccount(accountId: string, name: string): Promise<void> {
+  const authDir = authDirFor(name);
+  const { state, saveCreds } = await useMultiFileAuthState(authDir);
   const { version } = await fetchLatestBaileysVersion();
 
-  sock = makeWASocket({
+  const sock = makeWASocket({
     version,
     auth: state,
     logger,
@@ -55,44 +61,57 @@ export async function startWhatsApp(): Promise<void> {
 
     if (qr) {
       console.log(
-        "\nEscaneie o QR code abaixo no WhatsApp (Aparelhos conectados > Conectar aparelho):\n"
+        `\nEscaneie o QR code abaixo pra conta "${name}" (WhatsApp > Aparelhos conectados > Conectar aparelho):\n`
       );
       qrcodeTerminal.generate(qr, { small: true });
-      await prisma.whatsAppAccount.update({
-        where: { id: accountId },
-        data: { status: "CONNECTING" },
-      });
+      await prisma.whatsAppAccount.update({ where: { id: accountId }, data: { status: "CONNECTING" } });
     }
 
     if (connection === "open") {
-      const phoneNumber = sock?.user?.id?.split(":")[0];
-      console.log(`WhatsApp conectado${phoneNumber ? ` (${phoneNumber})` : ""}.`);
+      sockets.set(accountId, sock);
+      const phoneNumber = sock.user?.id?.split(":")[0];
+      console.log(`WhatsApp "${name}" conectado${phoneNumber ? ` (${phoneNumber})` : ""}.`);
       await prisma.whatsAppAccount.update({
         where: { id: accountId },
         data: { status: "CONNECTED", phoneNumber },
       });
-      await syncGroups(accountId!, sock!);
+      await syncGroups(accountId, sock);
     }
 
     if (connection === "close") {
+      sockets.delete(accountId);
       const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } })?.output
         ?.statusCode;
       const loggedOut = statusCode === DisconnectReason.loggedOut;
 
-      await prisma.whatsAppAccount.update({
-        where: { id: accountId! },
-        data: { status: "DISCONNECTED" },
-      });
+      await prisma.whatsAppAccount.update({ where: { id: accountId }, data: { status: "DISCONNECTED" } });
 
       if (loggedOut) {
         console.log(
-          "Sessão do WhatsApp encerrada (logout). Apague a pasta data/auth e reconecte com um novo QR code."
+          `Sessão "${name}" encerrada (logout). Apague data/auth/${name} e reconecte com um novo QR code.`
         );
         return;
       }
 
-      console.log("Conexão perdida, tentando reconectar...");
-      await startWhatsApp();
+      console.log(`Conexão "${name}" perdida, tentando reconectar...`);
+      await connectAccount(accountId, name);
     }
   });
+}
+
+/** Cria (se preciso) e conecta uma conta pelo nome. Retorna o accountId. */
+export async function startAccount(name: string): Promise<string> {
+  const accountId = await ensureAccountRow(name);
+  await connectAccount(accountId, name);
+  return accountId;
+}
+
+/** Reconecta todas as contas ja conhecidas; cria "default" se nao existir nenhuma. */
+export async function startAllAccounts(): Promise<void> {
+  const existing = await prisma.whatsAppAccount.findMany();
+  if (existing.length === 0) {
+    await startAccount("default");
+    return;
+  }
+  await Promise.all(existing.map((account) => connectAccount(account.id, account.name)));
 }
