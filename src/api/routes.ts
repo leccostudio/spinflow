@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../db/client.js";
-import { getSocketForAccount, startAccount } from "../whatsapp/baileys.js";
+import { getSocketForAccount, startAccount, getLatestQr } from "../whatsapp/baileys.js";
+import QRCode from "qrcode";
 import { syncGroups } from "../whatsapp/groups.js";
 import { convertLink } from "../links/convert.js";
 import { renderProductWithTemplate } from "../templates/service.js";
@@ -34,7 +35,14 @@ export async function apiRoutes(app: FastifyInstance) {
 
     // Nao espera a conexao completar (QR aparece nos logs do servidor) - so dispara.
     startAccount(name.trim()).catch((err) => console.error("Falha ao iniciar conta:", err));
-    return reply.code(202).send({ message: `Conta "${name}" sendo iniciada — veja o QR nos logs do servidor.` });
+    return reply.code(202).send({ message: `Conta "${name}" sendo iniciada — o QR aparece em alguns segundos.` });
+  });
+
+  app.get<{ Params: { id: string } }>("/whatsapp/accounts/:id/qr", async (request) => {
+    const raw = getLatestQr(request.params.id);
+    if (!raw) return { qr: null };
+    const qr = await QRCode.toDataURL(raw, { width: 280, margin: 1 });
+    return { qr };
   });
 
   app.get("/whatsapp/groups", async () => {

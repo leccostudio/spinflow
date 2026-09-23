@@ -100,6 +100,7 @@ export const api = {
   accounts: () => request<WhatsAppAccount[]>("/whatsapp/accounts"),
   createAccount: (name: string) =>
     request<{ message: string }>("/whatsapp/accounts", { method: "POST", body: JSON.stringify({ name }) }),
+  accountQr: (id: string) => request<{ qr: string | null }>(`/whatsapp/accounts/${id}/qr`),
   groups: () => request<WhatsAppGroup[]>("/whatsapp/groups"),
   syncGroups: (accountId?: string) =>
     request<{ count: number }>("/whatsapp/groups/sync", { method: "POST", body: JSON.stringify({ accountId }) }),

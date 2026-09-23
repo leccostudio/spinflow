@@ -7,6 +7,42 @@ const statusLabel: Record<string, { text: string; cls: string }> = {
   DISCONNECTED: { text: "Desconectado", cls: "red" },
 };
 
+function QrPanel({ accountId, accountName }: { accountId: string; accountName: string }) {
+  const [qr, setQr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    function poll() {
+      api
+        .accountQr(accountId)
+        .then((r) => {
+          if (!cancelled) setQr(r.qr);
+        })
+        .catch(() => {});
+    }
+    poll();
+    const interval = setInterval(poll, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [accountId]);
+
+  if (!qr) {
+    return <p style={{ fontSize: 13, color: "#6b7280" }}>Gerando QR code...</p>;
+  }
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <img src={qr} alt={`QR code para ${accountName}`} width={200} height={200} />
+      <p style={{ fontSize: 12, color: "#6b7280", maxWidth: 220 }}>
+        WhatsApp → Aparelhos conectados → Conectar aparelho. O código se renova sozinho a cada ~20s até você
+        escanear.
+      </p>
+    </div>
+  );
+}
+
 export default function Accounts() {
   const [accounts, setAccounts] = useState<WhatsAppAccount[]>([]);
   const [name, setName] = useState("");
@@ -53,11 +89,6 @@ export default function Accounts() {
 
       <div className="card">
         <h2>Nova conta</h2>
-        <p style={{ fontSize: 13, color: "#6b7280", marginTop: -6 }}>
-          Depois de criar, o QR code aparece nos <strong>logs do servidor</strong> (terminal onde roda{" "}
-          <code>npm run dev</code> ou <code>docker compose logs -f</code>) — escaneie com o número/chip que você quer
-          conectar como backup.
-        </p>
         <div className="row">
           <input
             type="text"
@@ -86,7 +117,10 @@ export default function Accounts() {
                 <tr key={a.id}>
                   <td>{a.name}</td>
                   <td>{a.phoneNumber ? `+${a.phoneNumber}` : "—"}</td>
-                  <td><span className={`badge ${badge.cls}`}>{badge.text}</span></td>
+                  <td>
+                    <span className={`badge ${badge.cls}`}>{badge.text}</span>
+                    {a.status === "CONNECTING" && <QrPanel accountId={a.id} accountName={a.name} />}
+                  </td>
                 </tr>
               );
             })}

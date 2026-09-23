@@ -14,6 +14,8 @@ import { registerAutomationListener } from "../automation/listener.js";
 
 const logger = pino({ level: "silent" });
 const sockets = new Map<string, WASocket>();
+// QR mais recente (string crua) por conta - Baileys reemite um novo a cada ~20s ate escanear.
+const latestQr = new Map<string, string>();
 
 function authDirFor(name: string): string {
   return path.join(process.cwd(), "data", "auth", name);
@@ -40,6 +42,11 @@ export function getSocket(): WASocket {
   return first.value;
 }
 
+/** QR cru (string) mais recente de uma conta aguardando pareamento, se houver. */
+export function getLatestQr(accountId: string): string | undefined {
+  return latestQr.get(accountId);
+}
+
 async function connectAccount(accountId: string, name: string): Promise<void> {
   const authDir = authDirFor(name);
   const { state, saveCreds } = await useMultiFileAuthState(authDir);
@@ -61,13 +68,15 @@ async function connectAccount(accountId: string, name: string): Promise<void> {
 
     if (qr) {
       console.log(
-        `\nEscaneie o QR code abaixo pra conta "${name}" (WhatsApp > Aparelhos conectados > Conectar aparelho):\n`
+        `\nEscaneie o QR code abaixo pra conta "${name}" (WhatsApp > Aparelhos conectados > Conectar aparelho) — ou veja em Contas WhatsApp no painel:\n`
       );
       qrcodeTerminal.generate(qr, { small: true });
+      latestQr.set(accountId, qr);
       await prisma.whatsAppAccount.update({ where: { id: accountId }, data: { status: "CONNECTING" } });
     }
 
     if (connection === "open") {
+      latestQr.delete(accountId);
       sockets.set(accountId, sock);
       const phoneNumber = sock.user?.id?.split(":")[0];
       console.log(`WhatsApp "${name}" conectado${phoneNumber ? ` (${phoneNumber})` : ""}.`);
@@ -80,6 +89,7 @@ async function connectAccount(accountId: string, name: string): Promise<void> {
 
     if (connection === "close") {
       sockets.delete(accountId);
+      latestQr.delete(accountId);
       const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } })?.output
         ?.statusCode;
       const loggedOut = statusCode === DisconnectReason.loggedOut;
