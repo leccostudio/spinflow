@@ -31,7 +31,7 @@ Ver [DEPLOY.md](DEPLOY.md) — Dockerfile e docker-compose já prontos, guia pas
 ## Estado atual — MVP completo + operação
 
 - [x] **Sprint 1** — Servidor Fastify + Prisma/SQLite, conexão WhatsApp via Baileys (QR pairing, reconexão automática), sincronização e toggle de grupos
-- [x] **Sprint 2** — Conversão de link: Shopee (API oficial, assinatura SHA256), Amazon (tag na URL), Mercado Livre (manual)
+- [x] **Sprint 2** — Conversão de link: Shopee (API oficial, assinatura SHA256), Amazon (tag na URL), Mercado Livre (`matt_word`/`matt_tool` — resolve o link curto e substitui pelo nosso rastreio)
 - [x] **Sprint 3** — Captura de produtos: listener nos grupos monitorados, filtro de marketplace *por grupo*, palavras restritas/permitidas (globais), deduplicação por janela de horas
 - [x] **Sprint 4** — Motor de templates (Handlebars) + envio manual, com extração heurística de nome/preço/desconto/cupom do texto bruto capturado
 - [x] **Imagem original** — reaproveita a foto da mensagem capturada (`useOriginalImage` por grupo) em vez de depender de link preview
@@ -68,7 +68,7 @@ As duas funcionalidades abaixo **enviam mensagens de verdade pros seus grupos re
 
 | Tela | O que configura |
 |---|---|
-| Plataformas | Credenciais Shopee (App ID/Secret/Sub-IDs), tag Amazon, tag Mercado Livre |
+| Plataformas | Credenciais Shopee (App ID/Secret/Sub-IDs), tag Amazon, tag + código Mercado Livre (`matt_word`/`matt_tool`) |
 | Monitoramento Automático | Janela de dedupe (horas pra não capturar o mesmo produto de novo) |
 | Configurações Avançadas | Palavras restritas / permitidas |
 | Disparo Automático | Janela de horário, intervalos, produtos por execução |
@@ -142,7 +142,7 @@ Condicionais (Handlebars — sintaxe diferente do BuboFlow original, mais fácil
 ## Limitações conhecidas / próximos passos possíveis
 
 - **Failover precisa de um segundo chip físico.** O código já suporta múltiplas contas e troca automaticamente pra conta de backup se a principal cair — mas isso só funciona se esse segundo número já for membro do grupo de verdade no WhatsApp (não dá pra automatizar essa parte, é uma ação sua: comprar um chip e adicionar o número aos grupos).
-- **Mercado Livre**: conversão de link ainda é manual (sem API pública simples — o original usa uma extensão de navegador pra capturar token, não implementada aqui).
+- **Mercado Livre**: conversão automática via `matt_word`/`matt_tool` (não são segredo — aparecem em qualquer link público seu; pegue em Ferramentas → Gerador de Link no portal de afiliados). Resolve o link curto primeiro (precisa de User-Agent de navegador, senão o ML bloqueia com 403) pra substituir o rastreio de quem postou original pelo seu.
 - **Preço/nome de produto**: extraídos por heurística de regex sobre o texto capturado, não por API oficial de dados de produto — funciona bem no formato comum ("Nome\n\nDe R$X por R$Y\n\nCupom: Z"), mas não é 100% garantido.
 - **`preview:` do bot**: como não temos API de dados de produto, o preview reflete só o que dá pra extrair do próprio link — sem contexto de mensagem (nome/preço), o resultado fica genérico.
 - **`/media` sem autenticação** — baixo risco (nomes de arquivo são UUIDs), mas vale saber.
