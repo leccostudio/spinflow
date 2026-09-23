@@ -40,7 +40,10 @@ Ver [DEPLOY.md](DEPLOY.md) — Dockerfile e docker-compose já prontos, guia pas
 - [x] **Painel web** — React/Vite, todas as telas (Visão Geral, Contas, Grupos, Produtos, Templates, Agendamentos, Disparo Automático)
 - [x] **Autenticação** — senha + sessão em cookie httpOnly, toda a API protegida
 - [x] **Deploy** — Dockerfile + docker-compose, guia de VPS
-- [x] **Múltiplas contas WhatsApp / failover por grupo** — gerenciador multi-conta, conta de backup configurável por grupo (precisa de um segundo chip físico pra escanear — código pronto, falta você conectar o número)
+- [x] **Múltiplas contas WhatsApp / failover por grupo** — gerenciador multi-conta, conta de backup configurável por grupo (precisa de um segundo chip físico pra escanear — código pronto, falta você conectar o número), QR code direto no painel
+- [x] **Hub de Configurações** — Disparo Automático, Grupo de Automação, Plataformas, Monitoramento Automático, Configurações Avançadas, Templates (link), Site (não implementado, com aviso explícito)
+- [x] **Credenciais e filtros configuráveis pela UI** — Shopee/Amazon/ML, palavras restritas/permitidas e janela de dedupe saíram do `.env` e foram pro banco, editáveis sem reiniciar o servidor
+- [x] **Produtos redesenhado** — grade de cards, filtro por plataforma/ordenação/status, busca por nome, favoritar, excluir, e **editar** (corrige nome/preço/cupom quando a extração automática erra)
 
 ## ⚠️ Antes de ativar disparo automático ou o bot de comandos
 
@@ -51,18 +54,24 @@ As duas funcionalidades abaixo **enviam mensagens de verdade pros seus grupos re
 
 **Recomendação**: na primeira vez que for ativar cada um, fique de olho no grupo #08 (poucos participantes) antes de confiar num grupo com audiência real.
 
-## Configuração (`.env`)
+## Configuração
+
+**`.env`** — só infraestrutura, precisa de restart pra mudar:
 
 | Variável | Uso |
 |---|---|
+| `PORT` | Porta do servidor (padrão 3333) |
+| `DATABASE_URL` | Caminho do banco SQLite |
 | `AUTH_PASSWORD` | Senha de login do painel. **Troque antes de expor o servidor na internet** — veja DEPLOY.md |
-| `SHOPEE_APP_ID` / `SHOPEE_APP_SECRET` | Credenciais da API de afiliados Shopee |
-| `SHOPEE_SUB_IDS` | Até 5 sub-ids de rastreio, separados por vírgula |
-| `AMAZON_AFFILIATE_TAG` | Tag de associado Amazon |
-| `MERCADOLIVRE_TAG` | Reservado (conversão ML ainda é manual) |
-| `RESTRICTED_WORDS` | Palavras que descartam a captura, separadas por vírgula |
-| `ALLOWED_WORDS` | Se preenchido, só captura mensagens com pelo menos uma dessas palavras |
-| `DEDUPE_WINDOW_HOURS` | Janela de horas pra evitar capturar o mesmo produto de novo (padrão 12; `0` desativa) |
+
+**Configurável pelo painel** (banco de dados, sem precisar reiniciar) — em **Configurações**:
+
+| Tela | O que configura |
+|---|---|
+| Plataformas | Credenciais Shopee (App ID/Secret/Sub-IDs), tag Amazon, tag Mercado Livre |
+| Monitoramento Automático | Janela de dedupe (horas pra não capturar o mesmo produto de novo) |
+| Configurações Avançadas | Palavras restritas / permitidas |
+| Disparo Automático | Janela de horário, intervalos, produtos por execução |
 
 ## Endpoints disponíveis (todos sob `/api`, exceto `/api/auth/*`, exigem sessão)
 
@@ -75,11 +84,14 @@ As duas funcionalidades abaixo **enviam mensagens de verdade pros seus grupos re
 | GET | `/api/whatsapp/status` | Status da primeira conta WhatsApp |
 | GET | `/api/whatsapp/accounts` | Lista todas as contas/números conectados |
 | POST | `/api/whatsapp/accounts` | `{ name }` — inicia uma nova conta (QR aparece nos logs do servidor) |
+| GET | `/api/whatsapp/accounts/:id/qr` | `{ qr }` — QR code em PNG (data URL) enquanto a conta está pareando |
 | GET | `/api/whatsapp/groups` | Lista grupos sincronizados |
 | POST | `/api/whatsapp/groups/sync` | Força sincronização (`{ accountId? }`, padrão = primeira conta) |
 | PATCH | `/api/whatsapp/groups/:id` | Atualiza `isMonitoring` / `isSending` / `monitoredMarketplaces` / `useOriginalImage` / `isAutomationGroup` / `backupAccountId` |
 | POST | `/api/links/convert` | Converte um link (`{ url, subIds? }`) pro marketplace detectado |
-| GET | `/api/products` | Lista produtos capturados (filtros: `?marketplace=`, `?groupId=`, `?status=`) |
+| GET | `/api/products` | Lista produtos (filtros: `?marketplace=`, `?groupId=`, `?status=`, `?search=`, `?favorite=true`, `?sort=price_asc\|price_desc\|discount_desc`) — cada item inclui `display` (nome/preço/desconto/cupom já calculados) |
+| PATCH | `/api/products/:id` | Atualiza `favorite` e/ou overrides (`nameOverride`, `priceOriginalOverride`, `priceDiscountedOverride`, `couponOverride`) |
+| DELETE | `/api/products/:id` | Remove um produto do catálogo |
 | GET/POST | `/api/templates` | Lista / cria templates de mensagem |
 | PATCH/DELETE | `/api/templates/:id` | Atualiza / remove um template |
 | POST | `/api/templates/:id/preview` | Renderiza um template contra um produto (`{ productId }`), sem enviar |
@@ -87,6 +99,8 @@ As duas funcionalidades abaixo **enviam mensagens de verdade pros seus grupos re
 | GET/POST | `/api/messages/scheduled` | Lista / cria agendamento (`{ groupIds, scheduledAt (ISO), text }` ou `productId`) |
 | DELETE | `/api/messages/scheduled/:id` | Cancela um agendamento pendente |
 | GET/PATCH | `/api/auto-dispatch` | Lê / atualiza config do disparo automático (guardrails aplicados no PATCH) |
+| GET/PATCH | `/api/settings/platforms` | Lê / atualiza credenciais de marketplace |
+| GET/PATCH | `/api/settings/monitoring` | Lê / atualiza palavras restritas/permitidas e janela de dedupe |
 
 Imagens capturadas ficam em `GET /media/<arquivo>` (sem autenticação — risco baixo, nome de arquivo é um UUID aleatório).
 
@@ -133,4 +147,6 @@ Condicionais (Handlebars — sintaxe diferente do BuboFlow original, mais fácil
 - **`preview:` do bot**: como não temos API de dados de produto, o preview reflete só o que dá pra extrair do próprio link — sem contexto de mensagem (nome/preço), o resultado fica genérico.
 - **`/media` sem autenticação** — baixo risco (nomes de arquivo são UUIDs), mas vale saber.
 - **Sessão expira sem redirecionamento automático** — se a sessão do painel expirar (30 dias) no meio do uso, as telas mostram erro em vez de voltar pro login sozinhas; precisa recarregar a página.
+- **Sem dado real de comissão.** O card de produto não mostra "Comissão: X%" como no BuboFlow original porque isso vem da API de dados de produto de cada marketplace, que não temos — mostrar um número inventado seria pior que não mostrar nada.
+- **"Site" (landing page pública) não implementado** — tela existe em Configurações, mas deixa isso explícito em vez de fingir que funciona. É um projeto à parte (precisa hospedagem/domínio próprio).
 - Relatórios (envios, monitor de membros) e reescrita de CTA via IA não foram implementados — item "fase 7" do roadmap original, não essencial pro funcionamento.
