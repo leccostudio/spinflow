@@ -92,6 +92,12 @@ model ScheduledMessage {
   @@index([status, scheduledAt])
 }
 
+model Session {
+  token     String   @id
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
 model AutoDispatchSettings {
   id                    String    @id @default("singleton")
   enabled               Boolean   @default(false)

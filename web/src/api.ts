@@ -1,11 +1,18 @@
 const BASE = "/api";
 
+export class UnauthorizedError extends Error {}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...options,
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) },
   });
   const data = await res.json().catch(() => undefined);
+  // /auth/login usa 401 pra "senha incorreta" - deixa a mensagem real passar.
+  if (res.status === 401 && path !== "/auth/login") {
+    throw new UnauthorizedError("Não autenticado.");
+  }
   if (!res.ok) {
     throw new Error((data && data.error) || `Erro ${res.status}`);
   }
@@ -124,4 +131,9 @@ export const api = {
   autoDispatch: () => request<AutoDispatchSettings>("/auto-dispatch"),
   updateAutoDispatch: (body: Partial<AutoDispatchSettings>) =>
     request<AutoDispatchSettings>("/auto-dispatch", { method: "PATCH", body: JSON.stringify(body) }),
+
+  authStatus: () => request<{ authenticated: boolean }>("/auth/status"),
+  login: (password: string) =>
+    request<{ ok: true }>("/auth/login", { method: "POST", body: JSON.stringify({ password }) }),
+  logout: () => request<{ ok: true }>("/auth/logout", { method: "POST" }),
 };

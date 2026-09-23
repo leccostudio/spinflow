@@ -1,18 +1,37 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
 import path from "node:path";
 import fs from "node:fs";
 import { apiRoutes } from "./routes.js";
+import { authRoutes } from "./authRoutes.js";
+import { isValidSession, SESSION_COOKIE } from "../auth/session.js";
 
 const WEB_DIST = path.join(process.cwd(), "web", "dist");
 const MEDIA_DIR = path.join(process.cwd(), "data", "media");
 
 export async function buildServer() {
   const app = Fastify({ logger: true });
-  await app.register(cors, { origin: true });
+  await app.register(cors, { origin: true, credentials: true });
+  await app.register(cookie);
 
-  await app.register(apiRoutes, { prefix: "/api" });
+  await app.register(
+    async (api) => {
+      await api.register(authRoutes); // /api/auth/* — sem exigir sessão
+
+      api.addHook("onRequest", async (request, reply) => {
+        if (request.raw.url?.startsWith("/api/auth")) return;
+        const token = request.cookies?.[SESSION_COOKIE];
+        if (!(await isValidSession(token))) {
+          reply.code(401).send({ error: "Não autenticado." });
+        }
+      });
+
+      await api.register(apiRoutes);
+    },
+    { prefix: "/api" }
+  );
 
   // Imagens capturadas (data/media/*.jpg), servidas pro painel exibir.
   fs.mkdirSync(MEDIA_DIR, { recursive: true });

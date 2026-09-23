@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
+import { api } from "./api";
 
 const links = [
   { to: "/", label: "Visão Geral", end: true },
@@ -9,12 +10,17 @@ const links = [
   { to: "/configuracoes", label: "Disparo Automático" },
 ];
 
-export default function App() {
+export default function App({ onLogout }: { onLogout: () => void }) {
+  async function logout() {
+    await api.logout().catch(() => {});
+    onLogout();
+  }
+
   return (
     <div className="layout">
-      <aside className="sidebar">
+      <aside className="sidebar" style={{ display: "flex", flexDirection: "column" }}>
         <div className="brand">🌀 SpinFlow</div>
-        <nav>
+        <nav style={{ flex: 1 }}>
           {links.map((l) => (
             <NavLink
               key={l.to}
@@ -26,6 +32,7 @@ export default function App() {
             </NavLink>
           ))}
         </nav>
+        <button className="secondary" onClick={logout}>Sair</button>
       </aside>
       <main className="main">
         <Outlet />

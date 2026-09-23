@@ -1,5 +1,6 @@
 export const env = {
   port: Number(process.env.PORT ?? 3333),
+  authPassword: process.env.AUTH_PASSWORD ?? "",
 
   shopee: {
     appId: process.env.SHOPEE_APP_ID ?? "",
