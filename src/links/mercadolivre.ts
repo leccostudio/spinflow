@@ -7,27 +7,29 @@ import { getPlatformSettings, isMercadoLivreConfigured } from "../config/setting
  * um link real gerado no portal oficial (não documentado publicamente, mas
  * verificado, não é suposição).
  *
- * Links capturados de grupos monitorados costumam vir como short link
- * (meli.la/... ou .../social/...) com o matt_word/matt_tool de QUEM POSTOU
- * embutido no redirect — por isso resolvemos o link primeiro e substituímos
- * pelos nossos próprios parâmetros, senão a comissão iria pro afiliado
- * original, não pra gente.
+ * Links capturados de grupos monitorados as vezes vem como short link
+ * (meli.la/...) com o matt_word/matt_tool de QUEM POSTOU embutido no redirect
+ * — por isso resolvemos SO esse caso e substituímos pelos nossos próprios
+ * parâmetros, senão a comissão iria pro afiliado original, não pra gente.
+ *
+ * IMPORTANTE: NÃO tentamos resolver/buscar uma URL que já é uma página
+ * completa do produto (produto.mercadolivre.com.br/...) — fazer fetch nela
+ * direto dispara a verificação anti-bot do ML (/gz/account-verification),
+ * que vira erroneamente o "link convertido" se não filtrarmos isso. Bug real
+ * encontrado em produção: só resolvemos hosts de link curto conhecidos.
  */
-export async function convertMercadoLivreLink(originUrl: string): Promise<string> {
-  if (!(await isMercadoLivreConfigured())) {
-    throw new Error(
-      "Tag/Código do Mercado Livre não configurados (Configurações > Plataformas)."
-    );
-  }
+const SHORT_LINK_HOSTS = new Set(["meli.la"]);
+const BOT_CHECK_MARKERS = ["/gz/account-verification", "/security/"];
 
-  const settings = await getPlatformSettings();
+function isShortLink(url: URL): boolean {
+  return SHORT_LINK_HOSTS.has(url.hostname) || url.pathname.startsWith("/sec/");
+}
 
-  let resolvedUrl = originUrl;
+async function resolveShortLink(originUrl: string): Promise<string> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
-    // Sem User-Agent de navegador, o ML bloqueia com 403 (confirmado testando) —
-    // o link nao resolve e a comissao ficaria com quem postou o link original.
+    // Sem User-Agent de navegador, o ML bloqueia com 403 (confirmado testando).
     const response = await fetch(originUrl, {
       redirect: "follow",
       signal: controller.signal,
@@ -37,12 +39,28 @@ export async function convertMercadoLivreLink(originUrl: string): Promise<string
       },
     });
     clearTimeout(timeout);
-    if (response.ok) {
-      resolvedUrl = response.url || originUrl;
+    if (response.ok && !BOT_CHECK_MARKERS.some((marker) => response.url.includes(marker))) {
+      return response.url || originUrl;
     }
   } catch {
-    // Se o resolve falhar, segue com a URL original — pelo menos tenta.
+    // segue com a URL original
   }
+  return originUrl;
+}
+
+export async function convertMercadoLivreLink(originUrl: string): Promise<string> {
+  if (!(await isMercadoLivreConfigured())) {
+    throw new Error(
+      "Tag/Código do Mercado Livre não configurados (Configurações > Plataformas)."
+    );
+  }
+
+  const settings = await getPlatformSettings();
+  const parsedOrigin = new URL(originUrl);
+
+  // So faz o fetch de resolve pra link curto de verdade — uma URL de produto
+  // completa ja e o destino final, buscar ela so arrisca cair no anti-bot.
+  const resolvedUrl = isShortLink(parsedOrigin) ? await resolveShortLink(originUrl) : originUrl;
 
   const url = new URL(resolvedUrl);
   url.searchParams.delete("matt_word");
