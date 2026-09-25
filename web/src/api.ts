@@ -160,6 +160,7 @@ export const api = {
     >
   ) => request<CapturedProduct>(`/products/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteProduct: (id: string) => request<{ ok: true }>(`/products/${id}`, { method: "DELETE" }),
+  reconvertProduct: (id: string) => request<CapturedProduct>(`/products/${id}/reconvert`, { method: "POST" }),
 
   convertLink: (url: string) => request<{ affiliateUrl: string; marketplace: string; method: string }>("/links/convert", { method: "POST", body: JSON.stringify({ url }) }),
 

@@ -18,6 +18,13 @@ import { getPlatformSettings, isMercadoLivreConfigured } from "../config/setting
  * que vira erroneamente o "link convertido" se não filtrarmos isso. Bug real
  * encontrado em produção: só resolvemos hosts de link curto conhecidos.
  */
+// IMPORTANTE #2: quando o short link resolve para "mercadolivre.com.br/social/{usuario}?...&ref=<token>",
+// o param `ref` NAO e identidade de afiliado - e um token opaco que diz a SPA do ML qual produto
+// especifico exibir naquela pagina de perfil social. Apagar `ref` (bug real encontrado em producao)
+// faz a pagina cair na aba generica "Listas" do perfil de quem postou, em vez do produto: o link
+// "convertido" parecia certo (matt_word/matt_tool corretos) mas levava para o lugar errado.
+// Confirmado ao vivo: preservando ref/forceInApp e so trocando matt_word/matt_tool, a pagina mostra
+// o produto certo. So removemos e substituimos matt_word/matt_tool - unicos params de comissao.
 const SHORT_LINK_HOSTS = new Set(["meli.la"]);
 const BOT_CHECK_MARKERS = ["/gz/account-verification", "/security/"];
 
@@ -63,10 +70,11 @@ export async function convertMercadoLivreLink(originUrl: string): Promise<string
   const resolvedUrl = isShortLink(parsedOrigin) ? await resolveShortLink(originUrl) : originUrl;
 
   const url = new URL(resolvedUrl);
+  // So mexemos nos params de identidade de afiliado/comissao. NAO tocamos em
+  // `ref`/`forceInApp` (nem em nenhum outro param) - eles controlam qual
+  // produto a pagina exibe, ver comentario acima.
   url.searchParams.delete("matt_word");
   url.searchParams.delete("matt_tool");
-  url.searchParams.delete("ref");
-  url.searchParams.delete("forceInApp");
   url.searchParams.set("matt_word", settings.mercadoLivreTag);
   url.searchParams.set("matt_tool", settings.mercadoLivreCode);
 

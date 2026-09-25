@@ -185,6 +185,29 @@ export async function apiRoutes(app: FastifyInstance) {
     return { ...updated, display: extractProductDisplay(updated) };
   });
 
+  app.post<{ Params: { id: string } }>("/products/:id/reconvert", async (request, reply) => {
+    const existing = await prisma.capturedProduct.findUnique({ where: { id: request.params.id } });
+    if (!existing) return reply.code(404).send({ error: "Produto não encontrado." });
+
+    let affiliateUrl: string | undefined;
+    let conversionError: string | undefined;
+    let status = existing.status;
+    try {
+      const result = await convertLink(existing.sourceUrl);
+      affiliateUrl = result.affiliateUrl;
+      status = result.method === "manual" ? "CAPTURED" : "CONVERTED";
+    } catch (err) {
+      conversionError = err instanceof Error ? err.message : "Erro desconhecido na conversão.";
+      status = "CONVERSION_FAILED";
+    }
+
+    const updated = await prisma.capturedProduct.update({
+      where: { id: existing.id },
+      data: { affiliateUrl, conversionError: conversionError ?? null, status },
+    });
+    return { ...updated, display: extractProductDisplay(updated) };
+  });
+
   app.delete<{ Params: { id: string } }>("/products/:id", async (request, reply) => {
     const existing = await prisma.capturedProduct.findUnique({ where: { id: request.params.id } });
     if (!existing) return reply.code(404).send({ error: "Produto não encontrado." });

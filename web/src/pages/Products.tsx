@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Eye, Send, MoreVertical, Pencil, Star, Trash2, Search, RotateCw, ChevronDown } from "lucide-react";
+import { Eye, Send, MoreVertical, Pencil, Star, Trash2, Search, RotateCw, ChevronDown, RefreshCw } from "lucide-react";
 import { api, type CapturedProduct, type WhatsAppGroup, type MessageTemplate } from "../api";
 
 const statusBadge: Record<string, string> = {
@@ -31,12 +31,11 @@ export default function Products() {
   const [loading, setLoading] = useState(true);
 
   const [openMenuFor, setOpenMenuFor] = useState<string | null>(null);
-  const [openSendFor, setOpenSendFor] = useState<string | null>(null);
   const [openEditFor, setOpenEditFor] = useState<string | null>(null);
   const [openDetailsFor, setOpenDetailsFor] = useState<string | null>(null);
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [editForm, setEditForm] = useState({ name: "", priceOriginal: "", priceDiscounted: "", coupon: "" });
-  const [sending, setSending] = useState(false);
+  const [sendingFor, setSendingFor] = useState<string | null>(null);
+  const [reconvertingFor, setReconvertingFor] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Record<string, string>>({});
 
   function load() {
@@ -64,25 +63,36 @@ export default function Products() {
 
   const sendGroups = groups.filter((g) => g.isSending);
 
-  function openSend(productId: string) {
-    setOpenMenuFor(null);
-    setOpenSendFor(openSendFor === productId ? null : productId);
-    setSelectedGroups(sendGroups.map((g) => g.id));
-  }
-
   async function doSend(productId: string) {
-    if (selectedGroups.length === 0) return;
-    setSending(true);
+    setOpenMenuFor(null);
+    if (sendGroups.length === 0) {
+      setFeedback((f) => ({ ...f, [productId]: `❌ Nenhum grupo "Enviar" ativo (Configurações > Grupos).` }));
+      return;
+    }
+    setSendingFor(productId);
     try {
-      const result = await api.sendMessage({ groupIds: selectedGroups, productId });
+      const result = await api.sendMessage({ groupIds: sendGroups.map((g) => g.id), productId });
       const ok = result.results.filter((r) => r.success).length;
       setFeedback((f) => ({ ...f, [productId]: `✅ Enviado para ${ok}/${result.results.length} grupo(s).` }));
-      setOpenSendFor(null);
       load();
     } catch (e) {
       setFeedback((f) => ({ ...f, [productId]: `❌ ${(e as Error).message}` }));
     } finally {
-      setSending(false);
+      setSendingFor(null);
+    }
+  }
+
+  async function reconvert(id: string) {
+    setOpenMenuFor(null);
+    setReconvertingFor(id);
+    try {
+      const updated = await api.reconvertProduct(id);
+      setProducts((ps) => ps.map((x) => (x.id === id ? updated : x)));
+      setFeedback((f) => ({ ...f, [id]: updated.status === "CONVERTED" ? "✅ Link reconvertido." : `❌ ${updated.conversionError ?? "Falha ao reconverter."}` }));
+    } catch (e) {
+      setFeedback((f) => ({ ...f, [id]: `❌ ${(e as Error).message}` }));
+    } finally {
+      setReconvertingFor(null);
     }
   }
 
@@ -236,8 +246,12 @@ export default function Products() {
                   >
                     <Eye size={11} /> Visualizar
                   </a>
-                  <button style={{ flex: 1.4, justifyContent: "center" }} onClick={() => openSend(p.id)}>
-                    <Send size={13} /> Enviar
+                  <button
+                    style={{ flex: 1.4, justifyContent: "center" }}
+                    onClick={() => doSend(p.id)}
+                    disabled={sendingFor === p.id}
+                  >
+                    <Send size={13} /> {sendingFor === p.id ? "Enviando..." : "Enviar"}
                   </button>
                   <button
                     className="secondary"
@@ -274,6 +288,16 @@ export default function Products() {
                       >
                         <Star size={13} /> {p.favorite ? "Remover dos favoritos" : "Favoritar produto"}
                       </button>
+                      {p.marketplace === "mercadolivre" && (
+                        <button
+                          className="secondary"
+                          style={{ width: "100%", justifyContent: "flex-start", background: "transparent", marginBottom: 2 }}
+                          onClick={() => reconvert(p.id)}
+                          disabled={reconvertingFor === p.id}
+                        >
+                          <RefreshCw size={13} /> {reconvertingFor === p.id ? "Reconvertendo..." : "Reconverter link"}
+                        </button>
+                      )}
                       <button
                         className="danger"
                         style={{ width: "100%", justifyContent: "flex-start", background: "transparent" }}
@@ -286,35 +310,6 @@ export default function Products() {
                 </div>
 
                 {feedback[p.id] && <div style={{ marginTop: 8, fontSize: 12 }}>{feedback[p.id]}</div>}
-
-                {openSendFor === p.id && (
-                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
-                    <label>Enviar para</label>
-                    <div className="row wrap" style={{ gap: 8, marginBottom: 8 }}>
-                      {sendGroups.length === 0 && <span className="empty">Nenhum grupo "Enviar" ativo.</span>}
-                      {sendGroups.map((g) => (
-                        <label key={g.id} className="row" style={{ gap: 4, fontSize: 12 }}>
-                          <input
-                            type="checkbox"
-                            checked={selectedGroups.includes(g.id)}
-                            onChange={(e) =>
-                              setSelectedGroups((sg) =>
-                                e.target.checked ? [...sg, g.id] : sg.filter((id) => id !== g.id)
-                              )
-                            }
-                          />
-                          {g.name}
-                        </label>
-                      ))}
-                    </div>
-                    <div className="row" style={{ gap: 6 }}>
-                      <button onClick={() => doSend(p.id)} disabled={sending || selectedGroups.length === 0}>
-                        {sending ? "Enviando..." : "Confirmar"}
-                      </button>
-                      <button className="secondary" onClick={() => setOpenSendFor(null)}>Cancelar</button>
-                    </div>
-                  </div>
-                )}
 
                 {openEditFor === p.id && (
                   <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
