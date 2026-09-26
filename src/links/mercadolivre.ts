@@ -32,6 +32,33 @@ function isShortLink(url: URL): boolean {
   return SHORT_LINK_HOSTS.has(url.hostname) || url.pathname.startsWith("/sec/");
 }
 
+// O link final (com o token `ref` preservado) fica gigante e feio - o gerador
+// oficial do ML tambem devolve uma versao curta (meli.la/xxx), mas so consegue
+// isso autenticado na sessao do afiliado, o que nao fazemos (ver decisao de
+// nao automatizar sessao logada do ML). Como alternativa sem credenciais,
+// encurtamos com o TinyURL (API publica, sem chave, sem login) so pra ficar
+// com cara de link de verdade nas mensagens - o destino real nao muda em nada.
+// Se o serviço falhar/estiver fora do ar, seguimos com o link longo: nunca
+// deixamos isso quebrar a conversao.
+async function shortenUrl(longUrl: string): Promise<string> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const response = await fetch(
+      `https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`,
+      { signal: controller.signal }
+    );
+    clearTimeout(timeout);
+    if (response.ok) {
+      const short = (await response.text()).trim();
+      if (short.startsWith("https://tinyurl.com/")) return short;
+    }
+  } catch {
+    // segue com o link longo
+  }
+  return longUrl;
+}
+
 async function resolveShortLink(originUrl: string): Promise<string> {
   try {
     const controller = new AbortController();
@@ -78,5 +105,5 @@ export async function convertMercadoLivreLink(originUrl: string): Promise<string
   url.searchParams.set("matt_word", settings.mercadoLivreTag);
   url.searchParams.set("matt_tool", settings.mercadoLivreCode);
 
-  return url.toString();
+  return shortenUrl(url.toString());
 }
