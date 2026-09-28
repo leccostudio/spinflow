@@ -183,8 +183,30 @@ export default function Products() {
         {products.map((p) => {
           const d = p.display;
           return (
-            <div key={p.id} className="card" style={{ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-              <div style={{ position: "relative", background: "var(--bg)", aspectRatio: "4/3" }}>
+            <div
+              key={p.id}
+              className="card"
+              style={{
+                padding: 0,
+                display: "flex",
+                flexDirection: "column",
+                position: "relative",
+                // Card nao pode cortar (overflow:hidden) senao o menu de 3 pontos
+                // some por baixo. Quando o menu esta aberto, sobe o z-index pra
+                // ficar acima dos cards vizinhos.
+                zIndex: openMenuFor === p.id ? 20 : undefined,
+              }}
+            >
+              <div
+                style={{
+                  position: "relative",
+                  background: "var(--bg)",
+                  aspectRatio: "4/3",
+                  overflow: "hidden",
+                  borderTopLeftRadius: 12,
+                  borderTopRightRadius: 12,
+                }}
+              >
                 {p.imagePath ? (
                   <img
                     src={`/media/${p.imagePath.split(/[\\/]/).pop()}`}
