@@ -161,6 +161,11 @@ export const api = {
   ) => request<CapturedProduct>(`/products/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteProduct: (id: string) => request<{ ok: true }>(`/products/${id}`, { method: "DELETE" }),
   reconvertProduct: (id: string) => request<CapturedProduct>(`/products/${id}/reconvert`, { method: "POST" }),
+  setProductLinks: (items: { id: string; affiliateUrl: string }[]) =>
+    request<{ results: { id: string; ok: boolean; error?: string }[] }>("/products/set-links", {
+      method: "POST",
+      body: JSON.stringify({ items }),
+    }),
 
   convertLink: (url: string) => request<{ affiliateUrl: string; marketplace: string; method: string }>("/links/convert", { method: "POST", body: JSON.stringify({ url }) }),
 

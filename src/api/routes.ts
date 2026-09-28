@@ -215,6 +215,51 @@ export async function apiRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  // Aplica links de afiliado gerados manualmente no gerador oficial do ML
+  // (fluxo em lote: usuario cola de volta os links que gerou logado na conta
+  // dele). So aceita links do proprio ML - nao guardamos sessao/credencial,
+  // o usuario gera os links por conta propria e cola aqui o resultado.
+  function isMercadoLivreUrl(raw: string): boolean {
+    try {
+      const host = new URL(raw).hostname.replace(/^www\./, "");
+      return host === "meli.la" || host.endsWith("mercadolivre.com.br");
+    } catch {
+      return false;
+    }
+  }
+
+  app.post<{ Body: { items?: { id: string; affiliateUrl: string }[] } }>(
+    "/products/set-links",
+    async (request, reply) => {
+      const items = request.body?.items ?? [];
+      if (items.length === 0) return reply.code(400).send({ error: "Nenhum link enviado." });
+
+      const results: { id: string; ok: boolean; error?: string }[] = [];
+      for (const item of items) {
+        const url = (item.affiliateUrl ?? "").trim();
+        if (!url) {
+          results.push({ id: item.id, ok: false, error: "Link vazio." });
+          continue;
+        }
+        if (!isMercadoLivreUrl(url)) {
+          results.push({ id: item.id, ok: false, error: "Link não é do Mercado Livre." });
+          continue;
+        }
+        const existing = await prisma.capturedProduct.findUnique({ where: { id: item.id } });
+        if (!existing) {
+          results.push({ id: item.id, ok: false, error: "Produto não encontrado." });
+          continue;
+        }
+        await prisma.capturedProduct.update({
+          where: { id: item.id },
+          data: { affiliateUrl: url, status: "CONVERTED", conversionError: null },
+        });
+        results.push({ id: item.id, ok: true });
+      }
+      return { results };
+    }
+  );
+
   app.post<{ Body: { url?: string; subIds?: string[] } }>("/links/convert", async (request, reply) => {
     const { url, subIds } = request.body ?? {};
     if (!url) {

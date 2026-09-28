@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard.tsx";
 import Accounts from "./pages/Accounts.tsx";
 import Groups from "./pages/Groups.tsx";
 import Products from "./pages/Products.tsx";
+import GerarLinks from "./pages/GerarLinks.tsx";
 import Templates from "./pages/Templates.tsx";
 import Scheduled from "./pages/Scheduled.tsx";
 import SettingsHub from "./pages/settings/SettingsHub.tsx";
@@ -40,6 +41,7 @@ function Root() {
           <Route path="contas" element={<Accounts />} />
           <Route path="grupos" element={<Groups />} />
           <Route path="produtos" element={<Products />} />
+          <Route path="gerar-links" element={<GerarLinks />} />
           <Route path="templates" element={<Templates />} />
           <Route path="agendamentos" element={<Scheduled />} />
           <Route path="configuracoes" element={<SettingsHub />} />
