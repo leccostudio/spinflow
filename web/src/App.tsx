@@ -8,6 +8,7 @@ import {
   Link2,
   FileText,
   CalendarClock,
+  Wallet,
   Sliders,
   Search,
   LogOut,
@@ -29,6 +30,7 @@ const sections: Array<{
       { to: "/gerar-links", label: "Gerar Links ML", icon: <Link2 size={16} /> },
       { to: "/templates", label: "Templates", icon: <FileText size={16} /> },
       { to: "/agendamentos", label: "Agendamentos", icon: <CalendarClock size={16} /> },
+      { to: "/financeiro", label: "Financeiro", icon: <Wallet size={16} /> },
     ],
   },
   {

@@ -130,6 +130,33 @@ model MonitoringSettings {
   updatedAt         DateTime @updatedAt
 }
 
+// Lancamentos financeiros (Financeiro). Valores em CENTAVOS (Int) pra evitar
+// erro de ponto flutuante nas somas - a API converte de/para reais.
+// SQLite nao tem enum: valores validos garantidos no app:
+//   tipo:       "gasto" | "ganho"
+//   plataforma: "meta" | "mercadolivre" | "amazon" | "shopee" | "outro"
+//   status:     "pendente" | "aprovado" | "pago" | "cancelado"
+//   origem:     "manual" | "api"
+model FinancialEntry {
+  id                String   @id @default(cuid())
+  tipo              String
+  plataforma        String
+  valorCents        Int
+  moeda             String   @default("BRL")
+  status            String   @default("pendente")
+  dataEvento        DateTime
+  dataSincronizacao DateTime?
+  origem            String   @default("manual")
+  referenciaExterna String?
+  descricao         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([dataEvento])
+  @@index([plataforma])
+  @@index([tipo, status])
+}
+
 model AutoDispatchSettings {
   id                    String    @id @default("singleton")
   enabled               Boolean   @default(false)

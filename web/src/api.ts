@@ -92,6 +92,27 @@ export interface MonitoringSettings {
   dedupeWindowHours: number;
 }
 
+export interface FinancialEntry {
+  id: string;
+  tipo: "gasto" | "ganho";
+  plataforma: string;
+  valor: number;
+  moeda: string;
+  status: string;
+  dataEvento: string;
+  dataSincronizacao: string | null;
+  origem: string;
+  referenciaExterna: string | null;
+  descricao: string | null;
+}
+
+export interface FinancialSummary {
+  totalGastos: number;
+  ganhosAprovados: number;
+  ganhosPendentes: number;
+  margem: number;
+}
+
 export interface MessageTemplate {
   id: string;
   name: string;
@@ -203,6 +224,32 @@ export const api = {
   monitoringSettings: () => request<MonitoringSettings>("/settings/monitoring"),
   updateMonitoringSettings: (body: Partial<MonitoringSettings>) =>
     request<MonitoringSettings>("/settings/monitoring", { method: "PATCH", body: JSON.stringify(body) }),
+
+  financeiroEntries: (params?: { from?: string; to?: string; plataforma?: string; tipo?: string; status?: string }) => {
+    const clean: Record<string, string> = {};
+    for (const [k, v] of Object.entries(params ?? {})) if (v) clean[k] = v;
+    const qs = new URLSearchParams(clean).toString();
+    return request<FinancialEntry[]>(`/financeiro/entries${qs ? `?${qs}` : ""}`);
+  },
+  financeiroSummary: (params?: { from?: string; to?: string; plataforma?: string }) => {
+    const clean: Record<string, string> = {};
+    for (const [k, v] of Object.entries(params ?? {})) if (v) clean[k] = v;
+    const qs = new URLSearchParams(clean).toString();
+    return request<FinancialSummary>(`/financeiro/summary${qs ? `?${qs}` : ""}`);
+  },
+  createFinanceiro: (body: {
+    tipo: string;
+    plataforma: string;
+    valor: number;
+    moeda?: string;
+    status?: string;
+    dataEvento: string;
+    referenciaExterna?: string | null;
+    descricao?: string | null;
+  }) => request<FinancialEntry>("/financeiro/entries", { method: "POST", body: JSON.stringify(body) }),
+  updateFinanceiro: (id: string, body: Partial<{ tipo: string; plataforma: string; valor: number; moeda: string; status: string; dataEvento: string; referenciaExterna: string | null; descricao: string | null }>) =>
+    request<FinancialEntry>(`/financeiro/entries/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteFinanceiro: (id: string) => request<{ ok: true }>(`/financeiro/entries/${id}`, { method: "DELETE" }),
 
   authStatus: () => request<{ authenticated: boolean }>("/auth/status"),
   login: (password: string) =>

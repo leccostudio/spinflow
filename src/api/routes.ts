@@ -475,4 +475,192 @@ export async function apiRoutes(app: FastifyInstance) {
   }>("/settings/monitoring", async (request) => {
     return updateMonitoringSettings(request.body);
   });
+
+  // --- Financeiro (Fase 1: lançamento manual + resumo) ---
+
+  const TIPOS = new Set(["gasto", "ganho"]);
+  const PLATAFORMAS = new Set(["meta", "mercadolivre", "amazon", "shopee", "outro"]);
+  const STATUSES = new Set(["pendente", "aprovado", "pago", "cancelado"]);
+
+  type FinEntry = {
+    id: string;
+    tipo: string;
+    plataforma: string;
+    valorCents: number;
+    moeda: string;
+    status: string;
+    dataEvento: Date;
+    dataSincronizacao: Date | null;
+    origem: string;
+    referenciaExterna: string | null;
+    descricao: string | null;
+  };
+
+  // Converte valorCents (Int no banco) pra reais (number) na resposta da API.
+  function serializeEntry(e: FinEntry) {
+    return { ...e, valor: e.valorCents / 100 };
+  }
+
+  // from/to sao "yyyy-mm-dd"; `to` vira fim do dia pra ser inclusivo.
+  function dateRange(from?: string, to?: string) {
+    const range: { gte?: Date; lte?: Date } = {};
+    if (from) {
+      const d = new Date(`${from}T00:00:00.000`);
+      if (!isNaN(d.getTime())) range.gte = d;
+    }
+    if (to) {
+      const d = new Date(`${to}T23:59:59.999`);
+      if (!isNaN(d.getTime())) range.lte = d;
+    }
+    return Object.keys(range).length ? range : undefined;
+  }
+
+  function parseValorCents(valor: unknown): number | null {
+    const n = typeof valor === "string" ? Number(valor.replace(",", ".")) : Number(valor);
+    if (!isFinite(n) || n < 0) return null;
+    return Math.round(n * 100);
+  }
+
+  app.get<{
+    Querystring: { from?: string; to?: string; plataforma?: string; tipo?: string; status?: string };
+  }>("/financeiro/entries", async (request) => {
+    const { from, to, plataforma, tipo, status } = request.query;
+    const entries = await prisma.financialEntry.findMany({
+      where: {
+        ...(plataforma ? { plataforma } : {}),
+        ...(tipo ? { tipo } : {}),
+        ...(status ? { status } : {}),
+        ...(dateRange(from, to) ? { dataEvento: dateRange(from, to) } : {}),
+      },
+      orderBy: { dataEvento: "desc" },
+    });
+    return entries.map(serializeEntry);
+  });
+
+  app.get<{
+    Querystring: { from?: string; to?: string; plataforma?: string };
+  }>("/financeiro/summary", async (request) => {
+    const { from, to, plataforma } = request.query;
+    const range = dateRange(from, to);
+    const baseWhere = {
+      ...(plataforma ? { plataforma } : {}),
+      ...(range ? { dataEvento: range } : {}),
+    };
+
+    const [gastos, aprovados, pendentes] = await Promise.all([
+      prisma.financialEntry.aggregate({
+        _sum: { valorCents: true },
+        where: { ...baseWhere, tipo: "gasto", status: { not: "cancelado" } },
+      }),
+      prisma.financialEntry.aggregate({
+        _sum: { valorCents: true },
+        where: { ...baseWhere, tipo: "ganho", status: { in: ["aprovado", "pago"] } },
+      }),
+      prisma.financialEntry.aggregate({
+        _sum: { valorCents: true },
+        where: { ...baseWhere, tipo: "ganho", status: "pendente" },
+      }),
+    ]);
+
+    const totalGastosCents = gastos._sum.valorCents ?? 0;
+    const ganhosAprovadosCents = aprovados._sum.valorCents ?? 0;
+    const ganhosPendentesCents = pendentes._sum.valorCents ?? 0;
+
+    return {
+      totalGastos: totalGastosCents / 100,
+      ganhosAprovados: ganhosAprovadosCents / 100,
+      ganhosPendentes: ganhosPendentesCents / 100,
+      margem: (ganhosAprovadosCents - totalGastosCents) / 100,
+    };
+  });
+
+  app.post<{
+    Body: {
+      tipo?: string;
+      plataforma?: string;
+      valor?: number | string;
+      moeda?: string;
+      status?: string;
+      dataEvento?: string;
+      referenciaExterna?: string | null;
+      descricao?: string | null;
+    };
+  }>("/financeiro/entries", async (request, reply) => {
+    const b = request.body ?? {};
+    if (!b.tipo || !TIPOS.has(b.tipo)) return reply.code(400).send({ error: "tipo inválido." });
+    if (!b.plataforma || !PLATAFORMAS.has(b.plataforma))
+      return reply.code(400).send({ error: "plataforma inválida." });
+    if (b.status && !STATUSES.has(b.status))
+      return reply.code(400).send({ error: "status inválido." });
+    const valorCents = parseValorCents(b.valor);
+    if (valorCents === null) return reply.code(400).send({ error: "valor inválido." });
+    const dataEvento = b.dataEvento ? new Date(b.dataEvento) : new Date();
+    if (isNaN(dataEvento.getTime())) return reply.code(400).send({ error: "data inválida." });
+
+    const created = await prisma.financialEntry.create({
+      data: {
+        tipo: b.tipo,
+        plataforma: b.plataforma,
+        valorCents,
+        moeda: b.moeda || "BRL",
+        status: b.status || (b.tipo === "gasto" ? "pago" : "pendente"),
+        dataEvento,
+        origem: "manual",
+        referenciaExterna: b.referenciaExterna || null,
+        descricao: b.descricao || null,
+      },
+    });
+    return serializeEntry(created);
+  });
+
+  app.patch<{
+    Params: { id: string };
+    Body: {
+      tipo?: string;
+      plataforma?: string;
+      valor?: number | string;
+      moeda?: string;
+      status?: string;
+      dataEvento?: string;
+      referenciaExterna?: string | null;
+      descricao?: string | null;
+    };
+  }>("/financeiro/entries/:id", async (request, reply) => {
+    const existing = await prisma.financialEntry.findUnique({ where: { id: request.params.id } });
+    if (!existing) return reply.code(404).send({ error: "Lançamento não encontrado." });
+    const b = request.body ?? {};
+    if (b.tipo && !TIPOS.has(b.tipo)) return reply.code(400).send({ error: "tipo inválido." });
+    if (b.plataforma && !PLATAFORMAS.has(b.plataforma))
+      return reply.code(400).send({ error: "plataforma inválida." });
+    if (b.status && !STATUSES.has(b.status))
+      return reply.code(400).send({ error: "status inválido." });
+
+    const data: Record<string, unknown> = {};
+    if (b.tipo) data.tipo = b.tipo;
+    if (b.plataforma) data.plataforma = b.plataforma;
+    if (b.moeda) data.moeda = b.moeda;
+    if (b.status) data.status = b.status;
+    if (b.referenciaExterna !== undefined) data.referenciaExterna = b.referenciaExterna || null;
+    if (b.descricao !== undefined) data.descricao = b.descricao || null;
+    if (b.valor !== undefined) {
+      const valorCents = parseValorCents(b.valor);
+      if (valorCents === null) return reply.code(400).send({ error: "valor inválido." });
+      data.valorCents = valorCents;
+    }
+    if (b.dataEvento) {
+      const d = new Date(b.dataEvento);
+      if (isNaN(d.getTime())) return reply.code(400).send({ error: "data inválida." });
+      data.dataEvento = d;
+    }
+
+    const updated = await prisma.financialEntry.update({ where: { id: existing.id }, data });
+    return serializeEntry(updated);
+  });
+
+  app.delete<{ Params: { id: string } }>("/financeiro/entries/:id", async (request, reply) => {
+    const existing = await prisma.financialEntry.findUnique({ where: { id: request.params.id } });
+    if (!existing) return reply.code(404).send({ error: "Lançamento não encontrado." });
+    await prisma.financialEntry.delete({ where: { id: existing.id } });
+    return { ok: true };
+  });
 }
