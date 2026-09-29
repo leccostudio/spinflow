@@ -4,6 +4,7 @@ import { startAllAccounts } from "./whatsapp/baileys.js";
 import { seedDefaultTemplate } from "./templates/seed.js";
 import { startScheduledMessageLoop } from "./scheduler/scheduled.js";
 import { startAutoDispatchLoop } from "./scheduler/autoDispatch.js";
+import { startMetaSyncLoop } from "./integrations/metaService.js";
 
 const PORT = Number(process.env.PORT ?? 3333);
 
@@ -18,7 +19,8 @@ async function main() {
 
   startScheduledMessageLoop();
   startAutoDispatchLoop(); // no-op enquanto AutoDispatchSettings.enabled = false (padrão)
-  console.log("Loops de agendamento e disparo automático iniciados.");
+  startMetaSyncLoop(); // no-op enquanto a integração Meta não estiver conectada + syncEnabled
+  console.log("Loops de agendamento, disparo automático e sync Meta iniciados.");
 }
 
 main().catch((err) => {

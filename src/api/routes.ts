@@ -15,6 +15,13 @@ import {
   getMonitoringSettings,
   updateMonitoringSettings,
 } from "../config/settings.js";
+import {
+  getMetaStatus,
+  connectMeta,
+  testMeta,
+  disconnectMeta,
+  runMetaSync,
+} from "../integrations/metaService.js";
 
 export async function apiRoutes(app: FastifyInstance) {
   app.get("/health", async () => ({ ok: true }));
@@ -662,5 +669,54 @@ export async function apiRoutes(app: FastifyInstance) {
     if (!existing) return reply.code(404).send({ error: "Lançamento não encontrado." });
     await prisma.financialEntry.delete({ where: { id: existing.id } });
     return { ok: true };
+  });
+
+  // --- Integrações: Meta Ads (Fase 2) ---
+
+  app.get("/integrations/meta", async () => {
+    return getMetaStatus();
+  });
+
+  app.post<{
+    Body: {
+      appId?: string;
+      accessToken?: string;
+      adAccountId?: string;
+      syncEnabled?: boolean;
+      syncIntervalMinutes?: number;
+      lookbackDays?: number;
+    };
+  }>("/integrations/meta", async (request, reply) => {
+    try {
+      return await connectMeta(request.body ?? {});
+    } catch (err) {
+      return reply
+        .code(400)
+        .send({ error: err instanceof Error ? err.message : "Erro ao conectar na Meta." });
+    }
+  });
+
+  app.post("/integrations/meta/test", async (_request, reply) => {
+    try {
+      return await testMeta();
+    } catch (err) {
+      return reply
+        .code(400)
+        .send({ error: err instanceof Error ? err.message : "Falha ao testar conexão." });
+    }
+  });
+
+  app.post("/integrations/meta/sync", async (_request, reply) => {
+    try {
+      return await runMetaSync();
+    } catch (err) {
+      return reply
+        .code(400)
+        .send({ error: err instanceof Error ? err.message : "Falha ao sincronizar." });
+    }
+  });
+
+  app.delete("/integrations/meta", async () => {
+    return disconnectMeta();
   });
 }

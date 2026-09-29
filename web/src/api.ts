@@ -113,6 +113,19 @@ export interface FinancialSummary {
   margem: number;
 }
 
+export interface MetaStatus {
+  connected: boolean;
+  statusConexao: string;
+  statusMensagem: string | null;
+  segmentoId: string | null;
+  appId: string;
+  hasToken: boolean;
+  ultimaSincronizacao: string | null;
+  syncEnabled: boolean;
+  syncIntervalMinutes: number;
+  lookbackDays: number;
+}
+
 export interface MessageTemplate {
   id: string;
   name: string;
@@ -250,6 +263,19 @@ export const api = {
   updateFinanceiro: (id: string, body: Partial<{ tipo: string; plataforma: string; valor: number; moeda: string; status: string; dataEvento: string; referenciaExterna: string | null; descricao: string | null }>) =>
     request<FinancialEntry>(`/financeiro/entries/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteFinanceiro: (id: string) => request<{ ok: true }>(`/financeiro/entries/${id}`, { method: "DELETE" }),
+
+  metaStatus: () => request<MetaStatus>("/integrations/meta"),
+  connectMeta: (body: {
+    appId?: string;
+    accessToken?: string;
+    adAccountId?: string;
+    syncEnabled?: boolean;
+    syncIntervalMinutes?: number;
+    lookbackDays?: number;
+  }) => request<MetaStatus>("/integrations/meta", { method: "POST", body: JSON.stringify(body) }),
+  testMeta: () => request<MetaStatus>("/integrations/meta/test", { method: "POST", body: "{}" }),
+  syncMeta: () => request<{ imported: number; updated: number; total: number }>("/integrations/meta/sync", { method: "POST", body: "{}" }),
+  disconnectMeta: () => request<{ ok: true }>("/integrations/meta", { method: "DELETE" }),
 
   authStatus: () => request<{ authenticated: boolean }>("/auth/status"),
   login: (password: string) =>

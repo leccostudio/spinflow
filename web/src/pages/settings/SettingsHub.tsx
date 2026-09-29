@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Zap, MessageSquare, Globe, FileText, ShoppingBag, Eye, SlidersHorizontal } from "lucide-react";
+import { Zap, MessageSquare, Globe, FileText, ShoppingBag, Eye, SlidersHorizontal, BarChart3 } from "lucide-react";
 
 const cards = [
   {
@@ -31,6 +31,12 @@ const cards = [
     icon: <ShoppingBag size={20} />,
     title: "Plataformas",
     desc: "Integrações com Marketplaces",
+  },
+  {
+    to: "/configuracoes/meta-ads",
+    icon: <BarChart3 size={20} />,
+    title: "Meta Ads",
+    desc: "Conecte sua conta e sincronize o gasto em anúncios",
   },
   {
     to: "/configuracoes/monitoramento",

@@ -157,6 +157,26 @@ model FinancialEntry {
   @@index([tipo, status])
 }
 
+// Credenciais de integracao com APIs externas (Fase 2+). O campo `credenciaisEnc`
+// guarda o segredo (ex: access token) CRIPTOGRAFADO com AES-256-GCM - nunca em
+// texto puro. `segmentoId` (ex: id da conta de anuncios act_...) nao e segredo.
+// SQLite sem enum: statusConexao = "desconectado" | "conectado" | "erro".
+model IntegrationCredential {
+  id                  String    @id @default(cuid())
+  plataforma          String    @unique
+  tipoAutenticacao    String    @default("token")
+  credenciaisEnc      String    @default("")
+  segmentoId          String?
+  statusConexao       String    @default("desconectado")
+  statusMensagem      String?
+  ultimaSincronizacao DateTime?
+  syncEnabled         Boolean   @default(false)
+  syncIntervalMinutes Int       @default(360)
+  lookbackDays        Int       @default(7)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
 model AutoDispatchSettings {
   id                    String    @id @default("singleton")
   enabled               Boolean   @default(false)
