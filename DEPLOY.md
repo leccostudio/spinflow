@@ -37,7 +37,7 @@ cp .env.example .env
 nano .env
 ```
 
-**Importante — troque a senha antes de expor isso na internet.** A senha atual (`(senha removida)`) foi gerada só pra teste local nesta sessão de desenvolvimento; eu sei o valor dela, então gere uma nova:
+**Importante — defina uma senha forte antes de expor isso na internet.** Nunca versione a senha real (o `.env` está no `.gitignore`). Gere uma nova:
 
 ```bash
 openssl rand -base64 9 | tr -d '+/=' 
