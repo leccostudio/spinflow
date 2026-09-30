@@ -530,7 +530,18 @@ export async function apiRoutes(app: FastifyInstance) {
   }
 
   function parseValorCents(valor: unknown): number | null {
-    const n = typeof valor === "string" ? Number(valor.replace(",", ".")) : Number(valor);
+    let n: number;
+    if (typeof valor === "string") {
+      // Aceita formato BR ("R$ 1.234,56") e US ("1234.56").
+      let s = valor.replace(/[R$\s]/gi, "").trim();
+      const hasComma = s.includes(",");
+      const hasDot = s.includes(".");
+      if (hasComma && hasDot) s = s.replace(/\./g, "").replace(",", ".");
+      else if (hasComma) s = s.replace(",", ".");
+      n = Number(s);
+    } else {
+      n = Number(valor);
+    }
     if (!isFinite(n) || n < 0) return null;
     return Math.round(n * 100);
   }
@@ -676,6 +687,101 @@ export async function apiRoutes(app: FastifyInstance) {
     if (!existing) return reply.code(404).send({ error: "Lançamento não encontrado." });
     await prisma.financialEntry.delete({ where: { id: existing.id } });
     return { ok: true };
+  });
+
+  // Importa lancamentos em lote a partir de um CSV (Fase 4). O frontend faz o
+  // parse do CSV e o mapeamento de colunas; aqui so validamos e gravamos.
+  // Dedupe: linhas com referenciaExterna que ja existe (mesma plataforma) sao
+  // puladas, pra reimportar o mesmo CSV nao duplicar.
+  app.post<{
+    Body: {
+      entries?: Array<{
+        tipo?: string;
+        plataforma?: string;
+        valor?: number | string;
+        status?: string;
+        dataEvento?: string;
+        descricao?: string | null;
+        referenciaExterna?: string | null;
+      }>;
+    };
+  }>("/financeiro/import", async (request, reply) => {
+    const entries = request.body?.entries ?? [];
+    if (entries.length === 0) return reply.code(400).send({ error: "Nenhuma linha para importar." });
+    if (entries.length > 5000) return reply.code(400).send({ error: "Máximo de 5000 linhas por importação." });
+
+    // Pre-carrega as referencias ja existentes das plataformas envolvidas.
+    const plataformas = [...new Set(entries.map((e) => e.plataforma).filter(Boolean) as string[])];
+    const refsInformadas = entries
+      .map((e) => (e.referenciaExterna || "").trim())
+      .filter(Boolean);
+    const existentes = new Set<string>();
+    if (plataformas.length && refsInformadas.length) {
+      const found = await prisma.financialEntry.findMany({
+        where: { plataforma: { in: plataformas }, referenciaExterna: { in: refsInformadas } },
+        select: { plataforma: true, referenciaExterna: true },
+      });
+      for (const f of found) existentes.add(`${f.plataforma}::${f.referenciaExterna}`);
+    }
+
+    let imported = 0;
+    let skipped = 0;
+    const errors: Array<{ linha: number; erro: string }> = [];
+    const seenInBatch = new Set<string>();
+
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      const linha = i + 1;
+      const tipo = e.tipo || "ganho";
+      const plataforma = e.plataforma || "";
+      if (!TIPOS.has(tipo)) {
+        errors.push({ linha, erro: "tipo inválido." });
+        continue;
+      }
+      if (!PLATAFORMAS.has(plataforma)) {
+        errors.push({ linha, erro: "plataforma inválida." });
+        continue;
+      }
+      if (e.status && !STATUSES.has(e.status)) {
+        errors.push({ linha, erro: "status inválido." });
+        continue;
+      }
+      const valorCents = parseValorCents(e.valor);
+      if (valorCents === null) {
+        errors.push({ linha, erro: "valor inválido." });
+        continue;
+      }
+      const dataEvento = e.dataEvento ? new Date(e.dataEvento) : null;
+      if (!dataEvento || isNaN(dataEvento.getTime())) {
+        errors.push({ linha, erro: "data inválida." });
+        continue;
+      }
+      const ref = (e.referenciaExterna || "").trim();
+      if (ref) {
+        const key = `${plataforma}::${ref}`;
+        if (existentes.has(key) || seenInBatch.has(key)) {
+          skipped++;
+          continue;
+        }
+        seenInBatch.add(key);
+      }
+      await prisma.financialEntry.create({
+        data: {
+          tipo,
+          plataforma,
+          valorCents,
+          moeda: "BRL",
+          status: e.status || (tipo === "gasto" ? "pago" : "pendente"),
+          dataEvento,
+          origem: "manual",
+          referenciaExterna: ref || null,
+          descricao: e.descricao || null,
+        },
+      });
+      imported++;
+    }
+
+    return { imported, skipped, errors };
   });
 
   // --- Integrações: Meta Ads (Fase 2) ---

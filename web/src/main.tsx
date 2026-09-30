@@ -10,6 +10,7 @@ import Groups from "./pages/Groups.tsx";
 import Products from "./pages/Products.tsx";
 import GerarLinks from "./pages/GerarLinks.tsx";
 import Financeiro from "./pages/Financeiro.tsx";
+import ImportarCSV from "./pages/ImportarCSV.tsx";
 import Templates from "./pages/Templates.tsx";
 import Scheduled from "./pages/Scheduled.tsx";
 import SettingsHub from "./pages/settings/SettingsHub.tsx";
@@ -48,6 +49,7 @@ function Root() {
           <Route path="templates" element={<Templates />} />
           <Route path="agendamentos" element={<Scheduled />} />
           <Route path="financeiro" element={<Financeiro />} />
+          <Route path="financeiro/importar" element={<ImportarCSV />} />
           <Route path="configuracoes" element={<SettingsHub />} />
           <Route path="configuracoes/disparo-automatico" element={<AutoDispatch />} />
           <Route path="configuracoes/grupo-automacao" element={<AutomationGroup />} />

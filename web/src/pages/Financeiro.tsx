@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, RotateCw, TrendingUp, TrendingDown, Wallet, Clock } from "lucide-react";
+import { Plus, Pencil, Trash2, RotateCw, TrendingUp, TrendingDown, Wallet, Clock, Upload } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api, type FinancialEntry, type FinancialSummary } from "../api";
 
 const PLATAFORMAS: Record<string, string> = {
@@ -147,9 +148,14 @@ export default function Financeiro() {
           <h1>Financeiro</h1>
           <p className="subtitle">Gastos e ganhos por período — {periodoLabel}</p>
         </div>
-        <button onClick={openNew}>
-          <Plus size={15} /> Novo lançamento
-        </button>
+        <div className="row" style={{ gap: 8 }}>
+          <Link to="/financeiro/importar" className="btn secondary" style={{ textDecoration: "none" }}>
+            <Upload size={15} /> Importar CSV
+          </Link>
+          <button onClick={openNew}>
+            <Plus size={15} /> Novo lançamento
+          </button>
+        </div>
       </div>
 
       {/* Resumo */}

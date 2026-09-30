@@ -275,6 +275,18 @@ export const api = {
   updateFinanceiro: (id: string, body: Partial<{ tipo: string; plataforma: string; valor: number; moeda: string; status: string; dataEvento: string; referenciaExterna: string | null; descricao: string | null }>) =>
     request<FinancialEntry>(`/financeiro/entries/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteFinanceiro: (id: string) => request<{ ok: true }>(`/financeiro/entries/${id}`, { method: "DELETE" }),
+  importFinanceiro: (entries: Array<{
+    tipo?: string;
+    plataforma?: string;
+    valor?: number | string;
+    status?: string;
+    dataEvento?: string;
+    descricao?: string | null;
+    referenciaExterna?: string | null;
+  }>) => request<{ imported: number; skipped: number; errors: Array<{ linha: number; erro: string }> }>(
+    "/financeiro/import",
+    { method: "POST", body: JSON.stringify({ entries }) }
+  ),
 
   metaStatus: () => request<MetaStatus>("/integrations/meta"),
   connectMeta: (body: {
