@@ -5,6 +5,7 @@ import { seedDefaultTemplate } from "./templates/seed.js";
 import { startScheduledMessageLoop } from "./scheduler/scheduled.js";
 import { startAutoDispatchLoop } from "./scheduler/autoDispatch.js";
 import { startMetaSyncLoop } from "./integrations/metaService.js";
+import { startShopeeSyncLoop } from "./integrations/shopeeService.js";
 
 const PORT = Number(process.env.PORT ?? 3333);
 
@@ -20,7 +21,8 @@ async function main() {
   startScheduledMessageLoop();
   startAutoDispatchLoop(); // no-op enquanto AutoDispatchSettings.enabled = false (padrão)
   startMetaSyncLoop(); // no-op enquanto a integração Meta não estiver conectada + syncEnabled
-  console.log("Loops de agendamento, disparo automático e sync Meta iniciados.");
+  startShopeeSyncLoop(); // no-op enquanto a integração Shopee não estiver conectada + syncEnabled
+  console.log("Loops de agendamento, disparo automático e sync Meta/Shopee iniciados.");
 }
 
 main().catch((err) => {

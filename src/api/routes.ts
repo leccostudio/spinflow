@@ -22,6 +22,13 @@ import {
   disconnectMeta,
   runMetaSync,
 } from "../integrations/metaService.js";
+import {
+  getShopeeStatus,
+  connectShopee,
+  testShopee,
+  disconnectShopee,
+  runShopeeSync,
+} from "../integrations/shopeeService.js";
 
 export async function apiRoutes(app: FastifyInstance) {
   app.get("/health", async () => ({ ok: true }));
@@ -718,5 +725,53 @@ export async function apiRoutes(app: FastifyInstance) {
 
   app.delete("/integrations/meta", async () => {
     return disconnectMeta();
+  });
+
+  // --- Integrações: Shopee Affiliate Open API (Fase 3) ---
+
+  app.get("/integrations/shopee", async () => {
+    return getShopeeStatus();
+  });
+
+  app.post<{
+    Body: {
+      appId?: string;
+      appSecret?: string;
+      syncEnabled?: boolean;
+      syncIntervalMinutes?: number;
+      lookbackDays?: number;
+    };
+  }>("/integrations/shopee", async (request, reply) => {
+    try {
+      return await connectShopee(request.body ?? {});
+    } catch (err) {
+      return reply
+        .code(400)
+        .send({ error: err instanceof Error ? err.message : "Erro ao conectar na Shopee." });
+    }
+  });
+
+  app.post("/integrations/shopee/test", async (_request, reply) => {
+    try {
+      return await testShopee();
+    } catch (err) {
+      return reply
+        .code(400)
+        .send({ error: err instanceof Error ? err.message : "Falha ao testar conexão." });
+    }
+  });
+
+  app.post("/integrations/shopee/sync", async (_request, reply) => {
+    try {
+      return await runShopeeSync();
+    } catch (err) {
+      return reply
+        .code(400)
+        .send({ error: err instanceof Error ? err.message : "Falha ao sincronizar." });
+    }
+  });
+
+  app.delete("/integrations/shopee", async () => {
+    return disconnectShopee();
   });
 }

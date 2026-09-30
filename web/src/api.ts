@@ -126,6 +126,18 @@ export interface MetaStatus {
   lookbackDays: number;
 }
 
+export interface ShopeeStatus {
+  connected: boolean;
+  statusConexao: string;
+  statusMensagem: string | null;
+  appId: string;
+  hasSecret: boolean;
+  ultimaSincronizacao: string | null;
+  syncEnabled: boolean;
+  syncIntervalMinutes: number;
+  lookbackDays: number;
+}
+
 export interface MessageTemplate {
   id: string;
   name: string;
@@ -276,6 +288,18 @@ export const api = {
   testMeta: () => request<MetaStatus>("/integrations/meta/test", { method: "POST", body: "{}" }),
   syncMeta: () => request<{ imported: number; updated: number; total: number }>("/integrations/meta/sync", { method: "POST", body: "{}" }),
   disconnectMeta: () => request<{ ok: true }>("/integrations/meta", { method: "DELETE" }),
+
+  shopeeStatus: () => request<ShopeeStatus>("/integrations/shopee"),
+  connectShopee: (body: {
+    appId?: string;
+    appSecret?: string;
+    syncEnabled?: boolean;
+    syncIntervalMinutes?: number;
+    lookbackDays?: number;
+  }) => request<ShopeeStatus>("/integrations/shopee", { method: "POST", body: JSON.stringify(body) }),
+  testShopee: () => request<ShopeeStatus>("/integrations/shopee/test", { method: "POST", body: "{}" }),
+  syncShopee: () => request<{ imported: number; updated: number; validated: number; total: number }>("/integrations/shopee/sync", { method: "POST", body: "{}" }),
+  disconnectShopee: () => request<{ ok: true }>("/integrations/shopee", { method: "DELETE" }),
 
   authStatus: () => request<{ authenticated: boolean }>("/auth/status"),
   login: (password: string) =>

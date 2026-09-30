@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Zap, MessageSquare, Globe, FileText, ShoppingBag, Eye, SlidersHorizontal, BarChart3 } from "lucide-react";
+import { Zap, MessageSquare, Globe, FileText, ShoppingBag, Eye, SlidersHorizontal, BarChart3, ShoppingCart } from "lucide-react";
 
 const cards = [
   {
@@ -37,6 +37,12 @@ const cards = [
     icon: <BarChart3 size={20} />,
     title: "Meta Ads",
     desc: "Conecte sua conta e sincronize o gasto em anúncios",
+  },
+  {
+    to: "/configuracoes/shopee-afiliados",
+    icon: <ShoppingCart size={20} />,
+    title: "Shopee Afiliados",
+    desc: "Sincronize as comissões de afiliado como ganhos",
   },
   {
     to: "/configuracoes/monitoramento",

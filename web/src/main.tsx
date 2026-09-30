@@ -20,6 +20,7 @@ import Monitoring from "./pages/settings/Monitoring.tsx";
 import Advanced from "./pages/settings/Advanced.tsx";
 import Site from "./pages/settings/Site.tsx";
 import MetaAds from "./pages/settings/MetaAds.tsx";
+import ShopeeAffiliate from "./pages/settings/ShopeeAffiliate.tsx";
 import { api } from "./api.ts";
 
 function Root() {
@@ -55,6 +56,7 @@ function Root() {
           <Route path="configuracoes/avancado" element={<Advanced />} />
           <Route path="configuracoes/site" element={<Site />} />
           <Route path="configuracoes/meta-ads" element={<MetaAds />} />
+          <Route path="configuracoes/shopee-afiliados" element={<ShopeeAffiliate />} />
         </Route>
       </Routes>
     </BrowserRouter>
